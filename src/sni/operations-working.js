@@ -151,6 +151,25 @@ class WorkingSMWOperations {
     }
   }
 
+  async killPlayer() {
+    try {
+      console.log('[killPlayer] Killing Mario...');
+
+      // Set Mario to small (no powerup)
+      await this.setMarioPowerup(POWERUP_TYPES.SMALL);
+
+      // Set lives to 0 to trigger death
+      await this.writeWithRetry(MEMORY_ADDRESSES.LIVES, Buffer.from([0x00]));
+      await this.writeWithRetry(0x7E0DBE, Buffer.from([0x00]));
+
+      console.log('[killPlayer] Mario killed');
+      return { success: true };
+    } catch (error) {
+      console.error('[killPlayer] Error:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
   async addCoins(amount = 10) {
     try {
       const current = await this.readWithRetry(MEMORY_ADDRESSES.COINS, 1);
