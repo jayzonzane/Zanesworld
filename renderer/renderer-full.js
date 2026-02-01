@@ -2403,14 +2403,10 @@ window.sniAPI.onSNIAutoConnected((data) => {
 window.sniAPI.onHoellStreamStatus((data) => {
   updateHoellStreamStatus(data.connected);
 
-  // Update toggle button text and color
+  // Log status changes (button updates are handled by toggle handler now)
   if (data.connected) {
     log('✅ HoellStream connected', 'success');
-    toggleHoellStreamBtn.textContent = '🎁 Stop HoellStream Polling';
-    toggleHoellStreamBtn.style.background = '#f44336';
   } else {
     log('⚠️ HoellStream disconnected', 'warning');
-    toggleHoellStreamBtn.textContent = '🎁 Start HoellStream Polling';
-    toggleHoellStreamBtn.style.background = '#2196F3';
   }
 });

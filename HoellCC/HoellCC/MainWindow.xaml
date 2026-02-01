@@ -1,0 +1,317 @@
+<Window x:Class="HoellCC.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:HoellCC.ViewModels"
+        xmlns:local="clr-namespace:HoellCC"
+        mc:Ignorable="d"
+        Title="HoellCC" Height="600" Width="900"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="{StaticResource NxVoidBrush}"
+        ResizeMode="CanResizeWithGrip">
+
+    <Window.DataContext>
+        <vm:MainViewModel/>
+    </Window.DataContext>
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="40" CornerRadius="0" GlassFrameThickness="0" ResizeBorderThickness="5"/>
+    </WindowChrome.WindowChrome>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title Bar -->
+        <Border Grid.Row="0" Background="{StaticResource NxDeepBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Title -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0">
+                    <TextBlock Text="HOELLCC" FontSize="16" FontWeight="Bold"
+                               Foreground="{StaticResource NxTextPrimaryBrush}">
+                        <TextBlock.Effect>
+                            <DropShadowEffect Color="{StaticResource NxPurpleColor}" BlurRadius="10" ShadowDepth="0" Opacity="0.8"/>
+                        </TextBlock.Effect>
+                    </TextBlock>
+                </StackPanel>
+
+                <!-- Window Buttons -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Content="&#xE713;" Style="{StaticResource NxWindowButton}"
+                            Command="{Binding ToggleSettingsCommand}" ToolTip="Settings"/>
+                    <Button Content="&#xE921;" Style="{StaticResource NxWindowButton}"
+                            Click="MinimizeButton_Click" ToolTip="Minimize"/>
+                    <Button Content="&#xE922;" Style="{StaticResource NxWindowButton}"
+                            Click="MaximizeButton_Click" ToolTip="Maximize"/>
+                    <Button Content="&#xE8BB;" Style="{StaticResource NxWindowCloseButton}"
+                            Click="CloseButton_Click" ToolTip="Close"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Content -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Main Panel -->
+            <Grid Grid.Column="0" Margin="12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="150"/>
+                </Grid.RowDefinitions>
+
+                <!-- SNI Connection Status -->
+                <Border Grid.Row="0" Background="{StaticResource NxSurfaceGradient}"
+                        CornerRadius="8" Padding="12" Margin="0,0,0,8">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Ellipse Grid.Column="0" Width="10" Height="10" Margin="0,0,8,0">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="{StaticResource NxDisconnectedBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsSniConnected}" Value="True">
+                                            <Setter Property="Fill" Value="{StaticResource NxConnectedBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                        <TextBlock Grid.Column="1" Text="{Binding SniStatus}"
+                                   Foreground="{StaticResource NxTextSecondaryBrush}" VerticalAlignment="Center"/>
+                        <ComboBox Grid.Column="2" Width="200" Margin="8,0"
+                                  ItemsSource="{Binding Devices}"
+                                  SelectedItem="{Binding SelectedDevice}"
+                                  DisplayMemberPath="DisplayName">
+                            <ComboBox.Style>
+                                <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Devices.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Devices.Count, Converter={x:Static local:GreaterThanZeroConverter.Instance}}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ComboBox.Style>
+                        </ComboBox>
+                        <Button Grid.Column="3" Command="{Binding ConnectSniCommand}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource NxPrimaryButton}">
+                                    <Setter Property="Content" Value="Connect"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsSniConnected}" Value="True">
+                                            <Setter Property="Content" Value="Disconnect"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- HoellStream Connection Status -->
+                <Border Grid.Row="1" Background="{StaticResource NxSurfaceGradient}"
+                        CornerRadius="8" Padding="12" Margin="0,0,0,12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Ellipse Grid.Column="0" Width="10" Height="10" Margin="0,0,8,0">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="{StaticResource NxDisconnectedBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsHoellStreamConnected}" Value="True">
+                                            <Setter Property="Fill" Value="{StaticResource NxConnectedBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                        <TextBlock Grid.Column="1" Text="{Binding HoellStreamStatus}"
+                                   Foreground="{StaticResource NxTextSecondaryBrush}" VerticalAlignment="Center"/>
+                        <Button Grid.Column="2" Command="{Binding ToggleHoellStreamCommand}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource NxPrimaryButton}">
+                                    <Setter Property="Content" Value="Start SSE"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsHoellStreamConnected}" Value="True">
+                                            <Setter Property="Content" Value="Stop SSE"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- Gift Mappings Section -->
+                <Grid Grid.Row="2">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="ACTION" Style="{StaticResource NxSectionHeader}"/>
+                        <TextBlock Grid.Column="1" Text="GIFT NAME" Style="{StaticResource NxSectionHeader}" Margin="8,0,0,0"/>
+                    </Grid>
+
+                    <Border Grid.Row="1" Background="{StaticResource NxDeepBrush}"
+                            CornerRadius="8" BorderBrush="{StaticResource NxBorderBrush}" BorderThickness="1">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding GiftMappings}" Background="Transparent">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="8,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ComboBox Grid.Column="0"
+                                                      ItemsSource="{Binding DataContext.AvailableActions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                      SelectedValue="{Binding ActionName}"
+                                                      SelectedValuePath="Name"
+                                                      DisplayMemberPath="DisplayName"
+                                                      VerticalAlignment="Center"/>
+                                            <TextBox Grid.Column="1" Text="{Binding GiftName, UpdateSourceTrigger=LostFocus}"
+                                                     Margin="8,0,0,0" VerticalAlignment="Center"
+                                                     LostFocus="GiftNameTextBox_LostFocus"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+
+                <!-- Recent Events Section -->
+                <TextBlock Grid.Row="3" Text="RECENT EVENTS" Style="{StaticResource NxSectionHeader}" Margin="0,12,0,8"/>
+
+                <Border Grid.Row="4" Background="{StaticResource NxDeepBrush}"
+                        CornerRadius="8" BorderBrush="{StaticResource NxBorderBrush}" BorderThickness="1">
+                    <ListBox ItemsSource="{Binding EventLog}" Background="Transparent" BorderThickness="0">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" Foreground="{StaticResource NxTextSecondaryBrush}"
+                                           FontSize="11" FontFamily="Consolas"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+            </Grid>
+
+            <!-- Settings Panel (Testing Ground) -->
+            <Border Grid.Column="1" Width="300" Background="{StaticResource NxDeepBrush}"
+                    BorderBrush="{StaticResource NxBorderBrush}" BorderThickness="1,0,0,0">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSettingsPanelOpen}" Value="True">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="12">
+                        <TextBlock Text="TESTING GROUND" Style="{StaticResource NxSectionHeader}"/>
+
+                        <!-- Quick Test -->
+                        <TextBlock Text="Quick Test" Foreground="{StaticResource NxTextSecondaryBrush}"
+                                   FontSize="11" Margin="0,0,0,4"/>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ComboBox Grid.Column="0"
+                                      ItemsSource="{Binding AvailableActions}"
+                                      SelectedItem="{Binding SelectedTestAction}"
+                                      DisplayMemberPath="DisplayName"
+                                      MaxDropDownHeight="300"/>
+                            <Button Grid.Column="1" Content="GO" Style="{StaticResource NxPrimaryButton}"
+                                    Command="{Binding ExecuteTestActionCommand}"
+                                    Margin="8,0,0,0" Padding="16,6"/>
+                        </Grid>
+
+                        <!-- Lives & Coins -->
+                        <TextBlock Text="Lives &amp; Coins" Foreground="{StaticResource NxTextSecondaryBrush}"
+                                   FontSize="11" Margin="0,8,0,4"/>
+                        <WrapPanel>
+                            <Button Content="Kill Mario" Style="{StaticResource NxTestButton}"
+                                    Command="{Binding TestKillMarioCommand}" Margin="0,0,4,4"/>
+                            <Button Content="+Life" Style="{StaticResource NxTestButton}"
+                                    Command="{Binding TestAddLifeCommand}" Margin="0,0,4,4"/>
+                            <Button Content="-Life" Style="{StaticResource NxTestButton}"
+                                    Command="{Binding TestRemoveLifeCommand}" Margin="0,0,4,4"/>
+                            <Button Content="+Coin" Style="{StaticResource NxTestButton}"
+                                    Command="{Binding TestAddCoinCommand}" Margin="0,0,4,4"/>
+                            <Button Content="-Coin" Style="{StaticResource NxTestButton}"
+                                    Command="{Binding TestRemoveCoinCommand}" Margin="0,0,4,4"/>
+                        </WrapPanel>
+
+                        <!-- Power-ups -->
+                        <TextBlock Text="Power-ups" Foreground="{StaticResource NxTextSecondaryBrush}"
+                                   FontSize="11" Margin="0,12,0,4"/>
+                        <WrapPanel>
+                            <Button Content="Small" Style="{StaticResource NxTestButton}"
+                                    Command="{Binding TestSetPowerUpCommand}" CommandParameter="0" Margin="0,0,4,4"/>
+                            <Button Content="Super" Style="{StaticResource NxTestButton}"
+                                    Command="{Binding TestSetPowerUpCommand}" CommandParameter="1" Margin="0,0,4,4"/>
+                            <Button Content="Cape" Style="{StaticResource NxTestButton}"
+                                    Command="{Binding TestSetPowerUpCommand}" CommandParameter="2" Margin="0,0,4,4"/>
+                            <Button Content="Fire" Style="{StaticResource NxTestButton}"
+                                    Command="{Binding TestSetPowerUpCommand}" CommandParameter="3" Margin="0,0,4,4"/>
+                        </WrapPanel>
+
+                        <!-- Special -->
+                        <TextBlock Text="Special" Foreground="{StaticResource NxTextSecondaryBrush}"
+                                   FontSize="11" Margin="0,12,0,4"/>
+                        <WrapPanel>
+                            <Button Content="Invincibility" Style="{StaticResource NxTestButton}"
+                                    Command="{Binding TestInvincibilityCommand}" Margin="0,0,4,4"/>
+                            <Button Content="Freeze" Style="{StaticResource NxTestButton}"
+                                    Command="{Binding TestFreezeCommand}" Margin="0,0,4,4"/>
+                            <Button Content="Unfreeze" Style="{StaticResource NxTestButton}"
+                                    Command="{Binding TestUnfreezeCommand}" Margin="0,0,4,4"/>
+                        </WrapPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

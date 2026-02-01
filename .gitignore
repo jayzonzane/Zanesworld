@@ -26,3 +26,30 @@ npm-debug.log*
 # Temporary files
 *.tmp
 *.temp
+
+# HoellCC build artifacts (keep source, ignore binaries)
+HoellCC/**/bin/
+HoellCC/**/obj/
+__HoellCC/
+
+# C# build outputs
+*.dll
+*.pdb
+*.cache
+
+# Test/debug files
+___All_Errors.txt
+_ul
+
+# ROM files
+*.smc
+*.sfc
+patched.smc
+
+# Keep source code
+!HoellCC/**/*.cs
+!HoellCC/**/*.xaml
+!HoellCC/**/*.csproj
+!HoellCC/**/*.sln
+!HoellCC/**/*.proto
+!HoellCC/**/*.md
