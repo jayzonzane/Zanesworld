@@ -1575,24 +1575,26 @@ async function loadOverlaySavePath() {
   }
 }
 
+// Store custom overlay save path
+let customOverlaySavePath = null;
+
 // Browse for overlay save path
 async function browseOverlayPath() {
   try {
     const result = await window.sniAPI.browseOverlayPath();
     if (result.success && result.path) {
-      // Set the new path
-      const setResult = await window.sniAPI.setOverlaySavePath(result.path);
-      if (setResult.success) {
-        // Update the display
-        const pathInput = document.getElementById('overlay-save-path');
-        if (pathInput) {
-          pathInput.value = result.path;
-          pathInput.placeholder = result.path;
-        }
-        log(`Overlay save location updated to: ${result.path}`, 'success');
-      } else {
-        log(`Failed to set path: ${setResult.error}`, 'error');
+      // Store the custom path
+      customOverlaySavePath = result.path;
+
+      // Update the display
+      const pathInput = document.getElementById('overlay-save-path');
+      if (pathInput) {
+        pathInput.value = result.path;
+        pathInput.placeholder = result.path;
       }
+      log(`Overlay save location set to: ${result.path}`, 'success');
+    } else if (!result.canceled) {
+      log('Failed to select save location', 'error');
     }
   } catch (error) {
     log(`Error browsing for path: ${error.message}`, 'error');
@@ -1602,20 +1604,17 @@ async function browseOverlayPath() {
 // Reset overlay save path to default
 async function resetOverlayPath() {
   try {
-    // Reset to default (empty string deletes the settings file)
-    const result = await window.sniAPI.setOverlaySavePath('');
+    // Clear the custom path
+    customOverlaySavePath = null;
 
-    if (result.success) {
-      // Update the display with the default path
-      const pathInput = document.getElementById('overlay-save-path');
-      if (pathInput) {
-        pathInput.value = result.savePath;
-        pathInput.placeholder = result.savePath;
-      }
-      log('Overlay save location reset to Downloads folder', 'success');
-    } else {
-      log(`Failed to reset path: ${result.error}`, 'error');
+    // Update the display with the default path
+    const pathInput = document.getElementById('overlay-save-path');
+    if (pathInput) {
+      const defaultPath = 'Downloads\\TikTok-Gift-Overlay.html';
+      pathInput.value = '';
+      pathInput.placeholder = defaultPath;
     }
+    log('Overlay save location reset to Downloads folder', 'success');
   } catch (error) {
     log(`Error resetting path: ${error.message}`, 'error');
   }
@@ -1791,9 +1790,9 @@ async function generateOverlay() {
     // Generate HTML content
     const html = generateOverlayHTML(gifts, width, height, stagger, pause, continuousLoop, spacing, selectedThresholds, thresholdDisplayMode);
 
-    // Save file via IPC
+    // Save file via IPC (use custom path if set)
     log('Generating overlay HTML...', 'info');
-    const saveResult = await window.sniAPI.saveOverlayFile(html);
+    const saveResult = await window.sniAPI.saveOverlayFile(html, customOverlaySavePath);
 
     if (saveResult.success) {
       log(`✅ Overlay saved successfully!`, 'success');

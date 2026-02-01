@@ -2039,11 +2039,43 @@ ipcMain.handle('download-missing-gift-images', async (event) => {
 
 // ============= OVERLAY BUILDER =============
 
-// Save overlay HTML file to Downloads folder
-ipcMain.handle('save-overlay-file', async (event, htmlContent) => {
+// Browse for custom overlay save location
+ipcMain.handle('browse-overlay-path', async (event) => {
   try {
-    const downloadsPath = app.getPath('downloads');
-    const filePath = pathModule.join(downloadsPath, 'TikTok-Gift-Overlay.html');
+    const { dialog } = require('electron');
+    const result = await dialog.showSaveDialog({
+      title: 'Save Overlay HTML File',
+      defaultPath: pathModule.join(app.getPath('downloads'), 'TikTok-Gift-Overlay.html'),
+      filters: [
+        { name: 'HTML Files', extensions: ['html'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+
+    if (result.canceled) {
+      return { success: false, canceled: true };
+    }
+
+    return { success: true, path: result.filePath };
+  } catch (error) {
+    console.error('Error browsing for overlay path:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Save overlay HTML file to specified path (or Downloads folder)
+ipcMain.handle('save-overlay-file', async (event, htmlContent, customPath = null) => {
+  try {
+    let filePath;
+
+    if (customPath) {
+      // Use custom path if provided
+      filePath = customPath;
+    } else {
+      // Default to Downloads folder
+      const downloadsPath = app.getPath('downloads');
+      filePath = pathModule.join(downloadsPath, 'TikTok-Gift-Overlay.html');
+    }
 
     await fs.writeFile(filePath, htmlContent, 'utf8');
     console.log(`🎬 Saved overlay file to ${filePath}`);
