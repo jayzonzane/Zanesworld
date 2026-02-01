@@ -153,6 +153,7 @@ contextBridge.exposeInMainWorld('sniAPI', {
   getConnectionMode: () => ipcRenderer.invoke('get-connection-mode'),
 
   // Unified Gift Source Controls
+  toggleGiftPolling: (source) => ipcRenderer.invoke('toggle-gift-polling', source),
   startGiftPolling: (source) => ipcRenderer.invoke('start-gift-polling', source),
   stopGiftPolling: () => ipcRenderer.invoke('stop-gift-polling'),
   getGiftPollingStats: () => ipcRenderer.invoke('get-gift-polling-stats'),

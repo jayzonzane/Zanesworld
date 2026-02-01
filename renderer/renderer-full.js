@@ -248,7 +248,8 @@ connectLuaBtn.addEventListener('click', async () => {
         statusDiv.className = 'status disconnected';
         log('Disconnected from Lua connector', 'info');
         updateLuaStatus(false);
-        giftSourceControls.style.display = 'none';
+        // Keep gift source controls visible - they don't require Lua connection
+        // giftSourceControls.style.display = 'none';
       }
     } catch (error) {
       log(`Disconnect failed: ${error.message}`, 'error');
@@ -270,7 +271,8 @@ connectLuaBtn.addEventListener('click', async () => {
         statusDiv.className = 'status connected';
         log('Connected to Lua connector successfully!', 'success');
         updateLuaStatus(true);
-        giftSourceControls.style.display = 'block';
+        // Gift source controls are always visible now
+        // giftSourceControls.style.display = 'block';
       } else {
         throw new Error(result.error || 'Connection failed');
       }
@@ -294,7 +296,8 @@ window.sniAPI.onLuaConnected(() => {
   statusDiv.className = 'status connected';
   log('Lua connector connected', 'success');
   updateLuaStatus(true);
-  giftSourceControls.style.display = 'block';
+  // Gift source controls are always visible now
+  // giftSourceControls.style.display = 'block';
 });
 
 window.sniAPI.onLuaDisconnected(() => {
@@ -304,7 +307,8 @@ window.sniAPI.onLuaDisconnected(() => {
   statusDiv.className = 'status disconnected';
   log('Lua connector disconnected', 'warning');
   updateLuaStatus(false);
-  giftSourceControls.style.display = 'none';
+  // Keep gift source controls visible - they don't require Lua connection
+  // giftSourceControls.style.display = 'none';
 });
 
 window.sniAPI.onLuaError((data) => {
@@ -321,7 +325,8 @@ deviceSelect.addEventListener('change', async (e) => {
       if (result.success) {
         selectedDevice = device;
         controlsSection.style.display = 'block';
-        giftSourceControls.style.display = 'block';
+        // Gift source controls are always visible now
+        // giftSourceControls.style.display = 'block';
         log(`Selected device: ${device.displayName || device.uri}`, 'success');
 
         // Check for MarioMod patch (HoellCC spawning requirement)
@@ -332,7 +337,8 @@ deviceSelect.addEventListener('change', async (e) => {
     }
   } else {
     controlsSection.style.display = 'none';
-    giftSourceControls.style.display = 'none';
+    // Keep gift source controls visible - they don't require SNI connection
+    // giftSourceControls.style.display = 'none';
     selectedDevice = null;
   }
 });
@@ -342,11 +348,32 @@ toggleGiftPollingBtn.addEventListener('click', async () => {
   try {
     toggleGiftPollingBtn.disabled = true;
 
-    if (giftPollingActive) {
-      // Stop polling
-      const result = await window.sniAPI.stopGiftPolling();
+    // Get selected source
+    const selectedSource = giftSourceSelect.value;
+    const result = await window.sniAPI.toggleGiftPolling(selectedSource);
 
-      if (result.success) {
+    if (result.success) {
+      if (result.polling) {
+        // Polling started
+        giftPollingActive = true;
+        activeGiftSource = result.source;
+        toggleGiftPollingBtn.textContent = '🎁 Stop Gift Polling';
+        toggleGiftPollingBtn.style.background = '#f44336';
+        giftPollingStatusDiv.textContent = `Active source: ${result.source}`;
+        giftSourceSelect.disabled = true;
+
+        // Update status lights
+        if (result.source === 'hoellstream') {
+          updateHoellStreamStatus(true);
+          updateTikFinityStatus(false);
+        } else if (result.source === 'tikfinity') {
+          updateHoellStreamStatus(false);
+          updateTikFinityStatus(true);
+        }
+
+        log(`✅ ${result.source} polling started`, 'success');
+      } else {
+        // Polling stopped
         giftPollingActive = false;
         activeGiftSource = null;
         toggleGiftPollingBtn.textContent = '🎁 Start Gift Polling';
@@ -359,35 +386,9 @@ toggleGiftPollingBtn.addEventListener('click', async () => {
         updateTikFinityStatus(false);
 
         log('⚠️ Gift polling stopped', 'warning');
-      } else {
-        log(`❌ Failed to stop gift polling: ${result.error}`, 'error');
       }
     } else {
-      // Start polling with selected source
-      const selectedSource = giftSourceSelect.value;
-      const result = await window.sniAPI.startGiftPolling(selectedSource);
-
-      if (result.success) {
-        giftPollingActive = true;
-        activeGiftSource = selectedSource;
-        toggleGiftPollingBtn.textContent = '🎁 Stop Gift Polling';
-        toggleGiftPollingBtn.style.background = '#f44336';
-        giftPollingStatusDiv.textContent = `Active source: ${selectedSource}`;
-        giftSourceSelect.disabled = true;
-
-        // Update status lights
-        if (selectedSource === 'hoellstream') {
-          updateHoellStreamStatus(true);
-          updateTikFinityStatus(false);
-        } else if (selectedSource === 'tikfinity') {
-          updateHoellStreamStatus(false);
-          updateTikFinityStatus(true);
-        }
-
-        log(`✅ Gift polling started with ${selectedSource}`, 'success');
-      } else {
-        log(`❌ Failed to start gift polling: ${result.error}`, 'error');
-      }
+      log(`❌ Failed to toggle gift polling: ${result.error}`, 'error');
     }
   } catch (error) {
     log(`❌ Error toggling gift polling: ${error.message}`, 'error');

@@ -2146,6 +2146,58 @@ ipcMain.handle('get-gift-polling-stats', async () => {
   }
 });
 
+// Toggle gift polling on/off (unified handler - source-aware)
+ipcMain.handle('toggle-gift-polling', async (event, source) => {
+  try {
+    if (!sourceManager) {
+      return { success: false, error: 'Gift source manager not initialized' };
+    }
+
+    const isCurrentlyPolling = sourceManager.isPolling();
+
+    if (isCurrentlyPolling) {
+      // Stop current source
+      await sourceManager.stopPolling();
+      stopThresholdStatusWriter();
+
+      // Notify renderer
+      if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.send('hoellstream-status', { connected: false });
+        mainWindow.webContents.send('tikfinity-status', { connected: false });
+      }
+
+      return {
+        success: true,
+        polling: false,
+        source: sourceManager.getActiveSource(),
+        message: 'Gift polling stopped'
+      };
+    } else {
+      // Start selected source
+      await sourceManager.startPolling(source);
+      startThresholdStatusWriter();
+
+      // Notify renderer
+      if (mainWindow && mainWindow.webContents) {
+        if (source === 'hoellstream') {
+          mainWindow.webContents.send('hoellstream-status', { connected: true });
+        } else if (source === 'tikfinity') {
+          mainWindow.webContents.send('tikfinity-status', { connected: true });
+        }
+      }
+
+      return {
+        success: true,
+        polling: true,
+        source: source,
+        message: `${source} polling started`
+      };
+    }
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 // ============================================================================
 // Lua Connector (Emulator Mode) IPC Handlers
 // ============================================================================
