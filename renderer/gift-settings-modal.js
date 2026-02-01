@@ -1792,11 +1792,18 @@ async function generateOverlay() {
     const html = generateOverlayHTML(gifts, width, height, stagger, pause, continuousLoop, spacing, selectedThresholds, thresholdDisplayMode);
 
     // Save file via IPC
+    log('Generating overlay HTML...', 'info');
     const saveResult = await window.sniAPI.saveOverlayFile(html);
+
     if (saveResult.success) {
-      log(`Overlay generated successfully! Saved to: ${saveResult.path}`, 'success');
+      log(`✅ Overlay saved successfully!`, 'success');
+      log(`📁 Location: ${saveResult.path}`, 'success');
+
+      // Show success notification
+      alert(`Overlay saved successfully!\n\nFile location:\n${saveResult.path}\n\nYou can now use this HTML file in OBS or your streaming software.`);
     } else {
-      log(`Failed to save overlay: ${saveResult.error}`, 'error');
+      log(`❌ Failed to save overlay: ${saveResult.error}`, 'error');
+      alert(`Failed to save overlay file:\n\n${saveResult.error}`);
     }
   } catch (error) {
     log(`Error generating overlay: ${error.message}`, 'error');
