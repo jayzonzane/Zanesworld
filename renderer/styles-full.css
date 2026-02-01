@@ -757,6 +757,35 @@ h3 {
   font-size: 12px;
 }
 
+/* Global Select and Option Styling - Fix white-on-white text */
+select,
+.form-control {
+  background: rgba(0,0,0,0.5) !important;
+  color: white !important;
+  border: 1px solid rgba(255,255,255,0.3) !important;
+  border-radius: 4px;
+  padding: 6px;
+}
+
+select option {
+  background: #2a2a2a !important;
+  color: white !important;
+  padding: 4px;
+}
+
+select option:hover,
+select option:focus,
+select option:checked {
+  background: #1e3c72 !important;
+  color: white !important;
+}
+
+/* Ensure dropdown lists are readable */
+select:focus {
+  outline: 2px solid rgba(255,255,255,0.5);
+  outline-offset: 2px;
+}
+
 /* Control Groups */
 .control-row {
   display: flex;
