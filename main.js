@@ -1631,9 +1631,52 @@ ipcMain.handle('load-gift-image-overrides', async () => {
 
 // ============= GIFT IMAGE DOWNLOAD =============
 
+// SECURITY: Validate image URL to prevent SSRF
+function validateImageUrl(url) {
+  try {
+    const parsedUrl = new URL(url);
+
+    // Only allow HTTPS
+    if (parsedUrl.protocol !== 'https:') {
+      return { valid: false, error: 'Only HTTPS URLs are allowed' };
+    }
+
+    // Whitelist allowed domains
+    const allowedDomains = [
+      'p16-webcast.tiktokcdn.com',
+      'p19-webcast.tiktokcdn.com',
+      'p77-webcast.tiktokcdn.com',
+      'streamtoearn.io',
+      'tiktokcdn.com'
+    ];
+
+    const isAllowed = allowedDomains.some(domain => {
+      return parsedUrl.hostname === domain || parsedUrl.hostname.endsWith('.' + domain);
+    });
+
+    if (!isAllowed) {
+      return {
+        valid: false,
+        error: `Domain not allowed: ${parsedUrl.hostname}. Only TikTok CDN URLs are permitted.`
+      };
+    }
+
+    return { valid: true };
+  } catch (error) {
+    return { valid: false, error: 'Invalid URL format' };
+  }
+}
+
 // Download a single image from URL
 function downloadImage(url, filepath) {
   return new Promise((resolve, reject) => {
+    // SECURITY: Validate URL before downloading
+    const validation = validateImageUrl(url);
+    if (!validation.valid) {
+      reject(new Error(`URL validation failed: ${validation.error}`));
+      return;
+    }
+
     https.get(url, (response) => {
       if (response.statusCode !== 200) {
         reject(new Error(`Failed to download: ${response.statusCode}`));
@@ -1803,6 +1846,13 @@ ipcMain.handle('get-downloaded-images-path', async () => {
 // Download a single gift image from URL
 ipcMain.handle('download-single-gift-image', async (event, giftName, coins, url) => {
   try {
+    // SECURITY: Validate URL to prevent SSRF attacks
+    const validation = validateImageUrl(url);
+    if (!validation.valid) {
+      console.error('URL validation failed:', validation.error);
+      return { success: false, error: validation.error };
+    }
+
     console.log(`🖼️ Downloading single image: ${giftName} (${coins} coins) from ${url}`);
 
     // Download to userData directory
@@ -2484,7 +2534,19 @@ ipcMain.handle('get-database-versions', async () => {
 ipcMain.handle('rollback-database', async (event, backupPath) => {
   try {
     if (!giftUpdater) throw new Error('Gift updater not initialized');
-    const result = await giftUpdater.rollback(backupPath);
+
+    // SECURITY: Validate that backup path is within the allowed directory
+    const userDataPath = app.getPath('userData');
+    const backupsDir = pathModule.join(userDataPath, 'gift-backups');
+    const normalizedBackupPath = pathModule.normalize(backupPath);
+    const normalizedBackupsDir = pathModule.normalize(backupsDir);
+
+    if (!normalizedBackupPath.startsWith(normalizedBackupsDir)) {
+      console.error('Path traversal attempt in rollback-database:', backupPath);
+      return { success: false, error: 'Invalid backup path: must be in gift-backups directory' };
+    }
+
+    const result = await giftUpdater.rollback(normalizedBackupPath);
     return result;
   } catch (error) {
     console.error('Rollback database error:', error);
@@ -2560,11 +2622,33 @@ app.whenReady().then(async () => {
       const url = new URL(request.url);
       // For gift-image://filename.webp, the filename is in url.host, not url.pathname
       let filename = url.host || url.pathname.substring(1);
-      const imagePath = path.join(app.getPath('userData'), 'gift-images', filename);
-      console.log(`[gift-image protocol] Request: ${request.url} -> ${imagePath}`);
+
+      // SECURITY: Sanitize filename to prevent path traversal
+      // Remove path traversal sequences and path separators
+      filename = filename.replace(/\.\./g, '').replace(/[\/\\]/g, '');
+
+      // Validate filename is not empty after sanitization
+      if (!filename || filename.length === 0) {
+        console.error('[gift-image protocol] Invalid filename after sanitization');
+        return new Response('Bad Request: Invalid filename', { status: 400 });
+      }
+
+      const imagesDir = path.join(app.getPath('userData'), 'gift-images');
+      const imagePath = path.join(imagesDir, filename);
+
+      // SECURITY: Validate that resolved path is within the allowed directory
+      const normalizedPath = path.normalize(imagePath);
+      const normalizedDir = path.normalize(imagesDir);
+
+      if (!normalizedPath.startsWith(normalizedDir)) {
+        console.error(`[gift-image protocol] Path traversal attempt detected: ${request.url}`);
+        return new Response('Forbidden: Path traversal detected', { status: 403 });
+      }
+
+      console.log(`[gift-image protocol] Request: ${request.url} -> ${normalizedPath}`);
 
       // Convert Windows path separators for file:// URL
-      const fileUrl = `file://${imagePath.replace(/\\/g, '/')}`;
+      const fileUrl = `file://${normalizedPath.replace(/\\/g, '/')}`;
       console.log(`[gift-image protocol] Fetching: ${fileUrl}`);
       return net.fetch(fileUrl);
     });
