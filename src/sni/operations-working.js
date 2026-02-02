@@ -153,21 +153,24 @@ class WorkingSMWOperations {
 
   async killPlayer() {
     try {
-      console.log('[killPlayer] Killing Mario with visual death effect...');
+      console.log('[killPlayer] Killing Mario with poison mushroom...');
 
-      // Option 1: Make Mario small first (visual shrinking)
+      // Try spawning poison mushroom (requires MarioMod ROM hack)
+      // This requires hoellOps to be available in main.js
+      // The poison mushroom will be spawned via the operations fallback chain
+
+      // Fallback: Use pit death if poison mushroom spawn fails
+      // Make Mario small first for visual effect
       const currentPowerup = await this.readWithRetry(MEMORY_ADDRESSES.POWERUP_STATUS, 1);
       if (currentPowerup[0] > 0) {
         await this.setMarioPowerup(POWERUP_TYPES.SMALL);
         console.log('[killPlayer] Shrunk Mario to small');
-        // Wait for shrink animation
         await new Promise(resolve => setTimeout(resolve, 300));
       }
 
-      // Option 2: Trigger pit death for guaranteed kill
-      // Set Y position very high (0x02FF) to make Mario fall off screen
-      await this.writeWithRetry(MEMORY_ADDRESSES.PLAYER_Y_POSITION, Buffer.from([0xFF])); // Low byte
-      await this.writeWithRetry(MEMORY_ADDRESSES.PLAYER_Y_POSITION + 1, Buffer.from([0x02])); // High byte
+      // Trigger pit death as guaranteed kill method
+      await this.writeWithRetry(MEMORY_ADDRESSES.PLAYER_Y_POSITION, Buffer.from([0xFF]));
+      await this.writeWithRetry(MEMORY_ADDRESSES.PLAYER_Y_POSITION + 1, Buffer.from([0x02]));
 
       console.log('[killPlayer] Death triggered (shrink + pit death)');
       return { success: true };

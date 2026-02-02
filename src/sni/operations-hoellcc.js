@@ -540,6 +540,46 @@ class HoellCCOperations {
   // ========================================================================
 
   /**
+   * Spawns a purple poison mushroom (custom sprite for ROM hacks)
+   * The mushroom will spawn near Mario and kill him when touched
+   */
+  async spawnPoisonMushroom() {
+    // Purple poison mushroom - custom sprite (common in ROM hacks)
+    // Sprite ID 0xC7 (199 decimal) - Invisible Mushroom slot, often repurposed
+    // Spawn slightly above Mario so it falls down
+    return await this.spawner.spawnSprite(0xC7, 0, -32, true);
+  }
+
+  /**
+   * Kill player with poison mushroom (visual death effect)
+   * Spawns a purple poison mushroom on Mario's position
+   */
+  async killPlayer() {
+    try {
+      console.log('[killPlayer] Spawning poison mushroom on Mario...');
+
+      // Spawn poison mushroom directly on Mario
+      // 0xC7 = sprite 199 (Invisible Mushroom slot, repurposed in ROM hacks)
+      // Spawn slightly above Mario (0 horizontal, -16 vertical) as custom sprite
+      const result = await this.spawner.spawnSprite(0xC7, 0, -16, true);
+
+      if (result.success) {
+        console.log('[killPlayer] Poison mushroom spawned successfully');
+        return { success: true };
+      } else {
+        console.log('[killPlayer] Poison mushroom spawn failed, falling back to pit death');
+        // Fallback: pit death
+        await this.client.writeMemory(0x7E0096, Buffer.from([0xFF]));
+        await this.client.writeMemory(0x7E0097, Buffer.from([0x02]));
+        return { success: true };
+      }
+    } catch (error) {
+      console.error('[killPlayer] Error:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Spawns Kaizo blocks when Mario is ACTUALLY jumping (tracks real velocity)
    * Blocks appear in direction of travel and auto-despawn after 2 seconds
    */
