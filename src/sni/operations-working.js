@@ -153,12 +153,14 @@ class WorkingSMWOperations {
 
   async killPlayer() {
     try {
-      console.log('[killPlayer] Killing Mario...');
+      console.log('[killPlayer] Killing Mario via pit death...');
 
-      // Trigger death by setting game mode to death animation (0x10)
-      await this.writeWithRetry(MEMORY_ADDRESSES.GAME_MODE, Buffer.from([0x10]));
+      // Force pit death by setting Y position very high (below screen)
+      // Y position is 16-bit: low byte at 0x0096, high byte at 0x0097
+      await this.writeWithRetry(MEMORY_ADDRESSES.PLAYER_Y_POSITION, Buffer.from([0xFF])); // Low byte
+      await this.writeWithRetry(MEMORY_ADDRESSES.PLAYER_Y_POSITION + 1, Buffer.from([0x02])); // High byte = 0x02FF
 
-      console.log('[killPlayer] Death animation triggered');
+      console.log('[killPlayer] Pit death triggered (Y position set to 0x02FF)');
       return { success: true };
     } catch (error) {
       console.error('[killPlayer] Error:', error.message);
