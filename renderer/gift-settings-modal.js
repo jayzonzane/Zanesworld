@@ -1647,6 +1647,7 @@ async function generateOverlay() {
     const pause = (parseFloat(document.getElementById('overlay-pause').value) || 30) * 1000;
     const spacing = parseInt(document.getElementById('overlay-spacing').value) || 150;
     const continuousLoop = document.getElementById('overlay-continuous-loop').checked;
+    const stationaryMode = document.getElementById('overlay-stationary-mode')?.checked || false;
 
     // Get selected gifts in DOM order (respects custom ordering)
     const giftItems = document.querySelectorAll('.overlay-gift-item');
@@ -1788,7 +1789,7 @@ async function generateOverlay() {
     }
 
     // Generate HTML content
-    const html = generateOverlayHTML(gifts, width, height, stagger, pause, continuousLoop, spacing, selectedThresholds, thresholdDisplayMode);
+    const html = generateOverlayHTML(gifts, width, height, stagger, pause, continuousLoop, spacing, selectedThresholds, thresholdDisplayMode, stationaryMode);
 
     // Save file via IPC (use custom path if set)
     log('Generating overlay HTML...', 'info');
@@ -1810,7 +1811,7 @@ async function generateOverlay() {
 }
 
 // Generate overlay HTML content
-function generateOverlayHTML(gifts, width, height, stagger, pause, continuousLoop = true, spacing = 100, selectedThresholds = [], thresholdDisplayMode = 'separate') {
+function generateOverlayHTML(gifts, width, height, stagger, pause, continuousLoop = true, spacing = 100, selectedThresholds = [], thresholdDisplayMode = 'separate', stationaryMode = false) {
   // Attach threshold metadata to gifts for inline display
   if (thresholdDisplayMode === 'inline') {
     gifts = gifts.map(gift => {
@@ -1912,6 +1913,25 @@ function generateOverlayHTML(gifts, width, height, stagger, pause, continuousLoo
     text-shadow:
       0 0 6px rgba(0,0,0,.85),
       0 0 14px rgba(0,0,0,.55);
+  }
+
+  /* Stationary Mode Grid Layout */
+  body.stationary .lane {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 30px;
+    padding: 20px;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  body.stationary .item {
+    position: relative;
+    transform: none !important;
+    visibility: visible !important;
+    flex: 0 0 auto;
   }
 
   /* Inline Threshold Styles */
@@ -2044,6 +2064,7 @@ function generateOverlayHTML(gifts, width, height, stagger, pause, continuousLoo
 const STAGGER_MS = ${stagger};
 const PAUSE_MS   = ${pause};
 const CONTINUOUS_LOOP = ${continuousLoop};
+const STATIONARY_MODE = ${stationaryMode};
 
 /* -------- DATA -------- */
 const gifts = ${giftsJSON};
@@ -2107,71 +2128,78 @@ function makeItem(g) {
 const els = gifts.map(makeItem);
 els.forEach(el => lane.appendChild(el));
 
-/* -------- MEASURE & ANIMATE -------- */
-const TRAVEL_MS   = ${period};
-const TAIL_GAP_PX = ${spacing};
+/* -------- STATIONARY OR ANIMATED MODE -------- */
+if (STATIONARY_MODE) {
+  // Add stationary class to body for CSS grid layout
+  document.body.classList.add('stationary');
+  // No animation needed - items are positioned via CSS flexbox
+} else {
+  /* -------- MEASURE & ANIMATE -------- */
+  const TRAVEL_MS   = ${period};
+  const TAIL_GAP_PX = ${spacing};
 
-let laneW = 0;
-let itemsW = new Array(COUNT).fill(280);
+  let laneW = 0;
+  let itemsW = new Array(COUNT).fill(280);
 
-function measure() {
-  laneW = lane.clientWidth;
-  els.forEach((el, i) => {
-    const r = el.getBoundingClientRect();
-    itemsW[i] = Math.max(240, Math.ceil(r.width || 280));
-  });
-}
-
-function positionAt(t) {
-  for (let i = 0; i < COUNT; i++) {
-    const start = i * STAGGER_MS;
-    let phase = t - start;
-    if (phase < 0) phase += PERIOD_MS;
-
-    const el = els[i];
-    const w = itemsW[i];
-    // Add extra spacing multiplier to increase gap between items
-    const effectiveSpacing = TAIL_GAP_PX * 2;
-    const dist = laneW + w + effectiveSpacing;
-
-    if (phase >= 0 && phase <= TRAVEL_MS) {
-      const p = phase / TRAVEL_MS;
-      const x = laneW - p * dist;
-      el.style.transform = 'translateX(' + x + 'px)';
-      el.style.visibility = 'visible';
-    } else {
-      el.style.transform = 'translateX(' + (laneW + effectiveSpacing) + 'px)';
-      el.style.visibility = 'hidden';
-    }
-  }
-}
-
-let startEpoch = performance.now();
-function tick(now) {
-  const elapsed = now - startEpoch;
-  const t = elapsed % LOOP_MS;
-
-  if (CONTINUOUS_LOOP || t < PERIOD_MS) {
-    positionAt(t);
-  } else {
-    els.forEach(el => {
-      el.style.transform = 'translateX(' + (lane.clientWidth + TAIL_GAP_PX) + 'px)';
-      el.style.visibility = 'hidden';
+  function measure() {
+    laneW = lane.clientWidth;
+    els.forEach((el, i) => {
+      const r = el.getBoundingClientRect();
+      itemsW[i] = Math.max(240, Math.ceil(r.width || 280));
     });
   }
-  requestAnimationFrame(tick);
-}
 
-function init() {
-  measure();
-  requestAnimationFrame(tick);
+  function positionAt(t) {
+    for (let i = 0; i < COUNT; i++) {
+      const start = i * STAGGER_MS;
+      let phase = t - start;
+      if (phase < 0) phase += PERIOD_MS;
+
+      const el = els[i];
+      const w = itemsW[i];
+      // Add extra spacing multiplier to increase gap between items
+      const effectiveSpacing = TAIL_GAP_PX * 2;
+      const dist = laneW + w + effectiveSpacing;
+
+      if (phase >= 0 && phase <= TRAVEL_MS) {
+        const p = phase / TRAVEL_MS;
+        const x = laneW - p * dist;
+        el.style.transform = 'translateX(' + x + 'px)';
+        el.style.visibility = 'visible';
+      } else {
+        el.style.transform = 'translateX(' + (laneW + effectiveSpacing) + 'px)';
+        el.style.visibility = 'hidden';
+      }
+    }
+  }
+
+  let startEpoch = performance.now();
+  function tick(now) {
+    const elapsed = now - startEpoch;
+    const t = elapsed % LOOP_MS;
+
+    if (CONTINUOUS_LOOP || t < PERIOD_MS) {
+      positionAt(t);
+    } else {
+      els.forEach(el => {
+        el.style.transform = 'translateX(' + (lane.clientWidth + TAIL_GAP_PX) + 'px)';
+        el.style.visibility = 'hidden';
+      });
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function init() {
+    measure();
+    requestAnimationFrame(tick);
+  }
+  window.addEventListener('resize', measure);
+  window.addEventListener('load', init);
+  els.forEach(el => {
+    const img = el.querySelector('img');
+    img.addEventListener('load', measure, { once: true });
+  });
 }
-window.addEventListener('resize', measure);
-window.addEventListener('load', init);
-els.forEach(el => {
-  const img = el.querySelector('img');
-  img.addEventListener('load', measure, { once: true });
-});
 
 /* -------- THRESHOLD TRACKING -------- */
 const thresholds = ${thresholdsJSON};
