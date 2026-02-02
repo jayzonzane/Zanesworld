@@ -751,6 +751,28 @@ document.addEventListener('DOMContentLoaded', () => {
       initDatabaseUpdatesTab();
     });
   }
+
+  // Handle coin value selection - Event delegation for dynamically created coin-select dropdowns
+  addManagedEventListener(document, 'change', (e) => {
+    if (e.target.classList.contains('coin-select')) {
+      const coinSelect = e.target;
+      const coinValue = coinSelect.value;
+      const pairedId = coinSelect.dataset.pairedGiftSelect;
+      const giftSelect = document.querySelector(`.gift-select[data-paired-select-id="${pairedId}"]`);
+
+      if (giftSelect) {
+        if (coinValue) {
+          // Populate gift dropdown with gifts for this coin value
+          giftSelect.innerHTML = GiftDatabase.generateGiftOptionsForCoinValue(coinValue);
+          giftSelect.disabled = false;
+        } else {
+          // Reset gift dropdown
+          giftSelect.innerHTML = '<option value="">Select coin value first...</option>';
+          giftSelect.disabled = true;
+        }
+      }
+    }
+  });
 });
 
 // Export functions that may be needed by other modules
