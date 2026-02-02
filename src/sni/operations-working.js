@@ -153,14 +153,20 @@ class WorkingSMWOperations {
 
   async killPlayer() {
     try {
-      console.log('[killPlayer] Killing Mario via pit death...');
+      console.log('[killPlayer] Killing Mario with visual death effect...');
 
-      // Force pit death by setting Y position very high (below screen)
-      // Y position is 16-bit: low byte at 0x0096, high byte at 0x0097
-      await this.writeWithRetry(MEMORY_ADDRESSES.PLAYER_Y_POSITION, Buffer.from([0xFF])); // Low byte
-      await this.writeWithRetry(MEMORY_ADDRESSES.PLAYER_Y_POSITION + 1, Buffer.from([0x02])); // High byte = 0x02FF
+      // Make Mario small so he can be killed by one hit
+      await this.setMarioPowerup(POWERUP_TYPES.SMALL);
+      console.log('[killPlayer] Set Mario to small');
 
-      console.log('[killPlayer] Pit death triggered (Y position set to 0x02FF)');
+      // Wait a moment for powerup change to register
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Force pit death as backup (in case spawning fails)
+      await this.writeWithRetry(MEMORY_ADDRESSES.PLAYER_Y_POSITION, Buffer.from([0xFF]));
+      await this.writeWithRetry(MEMORY_ADDRESSES.PLAYER_Y_POSITION + 1, Buffer.from([0x02]));
+
+      console.log('[killPlayer] Death triggered (pit death)');
       return { success: true };
     } catch (error) {
       console.error('[killPlayer] Error:', error.message);
