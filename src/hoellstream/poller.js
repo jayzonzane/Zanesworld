@@ -5,9 +5,8 @@
 const logger = require('../utils/logger');
 
 class HoellStreamPoller {
-  constructor(gameOperations, basicOperations, config = {}) {
-    this.gameOps = gameOperations;  // expandedOps (kept for backward compatibility)
-    this.basicOps = basicOperations; // gameOps (kept for backward compatibility)
+  constructor(gameOperations, config = {}) {
+    this.gameOps = gameOperations;  // SMW operations
     this.restorationManager = null; // ItemRestorationManager (kept for backward compatibility)
     this.eventProcessor = null; // EventProcessor handles all gift processing now
     this.pollInterval = null;

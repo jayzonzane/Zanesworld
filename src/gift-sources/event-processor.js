@@ -30,15 +30,13 @@ class EventProcessor {
   /**
    * Create an EventProcessor instance
    *
-   * @param {Object} gameOperations - Game operations instance (expandedOps)
-   * @param {Object} basicOperations - Basic operations instance (gameOps)
+   * @param {Object} gameOperations - Game operations instance (SMW operations)
    * @param {Object} config - Configuration options
    * @param {boolean} config.debugMode - Enable debug logging (default true)
    * @param {Object} config.giftDatabase - TikTok gift database for coin value lookups
    */
-  constructor(gameOperations, basicOperations, config = {}) {
-    this.gameOps = gameOperations;  // expandedOps
-    this.basicOps = basicOperations; // gameOps (has KO player)
+  constructor(gameOperations, config = {}) {
+    this.gameOps = gameOperations;  // SMW operations only
     this.restorationManager = null; // ItemRestorationManager (set via setRestorationManager)
     this.scriptEngine = null; // ScriptEngine (set via setScriptEngine)
     this.seenEventIds = new Set();
@@ -183,15 +181,12 @@ class EventProcessor {
   /**
    * Update game operations (called when switching between SNI and Lua connector)
    *
-   * @param {Object} gameOperations - Game operations instance (expandedOps)
-   * @param {Object} basicOperations - Basic operations instance (gameOps)
+   * @param {Object} gameOperations - Game operations instance (SMW operations)
    */
-  updateOperations(gameOperations, basicOperations) {
-    this.gameOps = gameOperations;  // expandedOps
-    this.basicOps = basicOperations; // gameOps (has KO player)
+  updateOperations(gameOperations) {
+    this.gameOps = gameOperations;  // SMW operations only
     this.log('🔄 EventProcessor operations updated');
     this.log(`   gameOps type: ${this.gameOps.constructor.name}`);
-    this.log(`   basicOps type: ${this.basicOps.constructor.name}`);
   }
 
   /**
@@ -348,7 +343,6 @@ class EventProcessor {
     console.log('🔍 [EventProcessor.processEvent] Called!');
     console.log('   Event:', event);
     console.log('   gameOps type:', this.gameOps ? this.gameOps.constructor.name : 'null');
-    console.log('   basicOps type:', this.basicOps ? this.basicOps.constructor.name : 'null');
 
     const processStartTime = Date.now();
 
@@ -524,7 +518,7 @@ class EventProcessor {
       let result;
 
       this.log(`🔧 Executing action: ${action}`, 'info');
-      this.log(`   Using operations: gameOps=${this.gameOps.constructor.name}, basicOps=${this.basicOps.constructor.name}`, 'info');
+      this.log(`   Using operations: gameOps=${this.gameOps.constructor.name}`, 'info');
 
       // Special handling for disableItem action (only relevant for ALTTP - skip for SMW)
       if (action === 'disableItem') {
@@ -543,8 +537,6 @@ class EventProcessor {
         let ops = null;
         if (typeof this.gameOps[action] === 'function') {
           ops = this.gameOps; // expandedOps
-        } else if (typeof this.basicOps[action] === 'function') {
-          ops = this.basicOps; // gameOps (basic operations)
         } else {
           this.log(`❌ Invalid action: ${action} does not exist in either operations`, 'error');
           return;
@@ -568,8 +560,6 @@ class EventProcessor {
       if (typeof this.gameOps[action] === 'function') {
         ops = this.gameOps; // expandedOps
         this.log(`   Found action in expandedOps`, 'info');
-      } else if (typeof this.basicOps[action] === 'function') {
-        ops = this.basicOps; // gameOps (basic operations)
         this.log(`   Found action in basicOps`, 'info');
       } else {
         this.log(`❌ Invalid action: ${action} does not exist in either operations`, 'error');
@@ -640,8 +630,6 @@ class EventProcessor {
         let ops = null;
         if (typeof this.gameOps[action] === 'function') {
           ops = this.gameOps; // expandedOps
-        } else if (typeof this.basicOps[action] === 'function') {
-          ops = this.basicOps; // gameOps (basic operations)
         } else {
           this.log(`❌ Invalid action: ${action} does not exist in either operations`, 'error');
           return;
@@ -665,8 +653,6 @@ class EventProcessor {
       if (typeof this.gameOps[action] === 'function') {
         ops = this.gameOps; // expandedOps
         this.log(`   [Threshold] Found action in expandedOps`, 'info');
-      } else if (typeof this.basicOps[action] === 'function') {
-        ops = this.basicOps; // gameOps (basic operations)
         this.log(`   [Threshold] Found action in basicOps`, 'info');
       } else {
         this.log(`❌ [Threshold] Invalid action: ${action} does not exist in either operations`, 'error');

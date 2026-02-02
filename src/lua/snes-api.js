@@ -5,11 +5,9 @@
  */
 
 class SNESApi {
-  constructor(sniClient, gameOps, expandedOps, hoellOps) {
+  constructor(sniClient, smwOps) {
     this.sniClient = sniClient;
-    this.gameOps = gameOps; // Basic operations (operations.js)
-    this.expandedOps = expandedOps; // Working SMW operations (operations-working.js)
-    this.hoellOps = hoellOps; // HoellCC operations (operations-hoellcc.js)
+    this.smwOps = smwOps; // SMW operations
   }
 
   /**
@@ -67,7 +65,7 @@ class SNESApi {
          */
         addCoins: async (amount = 10) => {
           try {
-            const result = await this.expandedOps.addCoins(amount);
+            const result = await this.smwOps.addCoins(amount);
             return result.success;
           } catch (error) {
             console.error('[SNESApi] addCoins error:', error);
@@ -82,7 +80,7 @@ class SNESApi {
          */
         removeCoins: async (amount = 10) => {
           try {
-            const result = await this.expandedOps.removeCoins(amount);
+            const result = await this.smwOps.removeCoins(amount);
             return result.success;
           } catch (error) {
             console.error('[SNESApi] removeCoins error:', error);
@@ -97,7 +95,7 @@ class SNESApi {
          */
         addLives: async (count = 1) => {
           try {
-            const result = await this.expandedOps.addLife(count);
+            const result = await this.smwOps.addLife(count);
             return result.success;
           } catch (error) {
             console.error('[SNESApi] addLives error:', error);
@@ -112,7 +110,7 @@ class SNESApi {
          */
         removeLives: async (count = 1) => {
           try {
-            const result = await this.expandedOps.removeLife(count);
+            const result = await this.smwOps.removeLife(count);
             return result.success;
           } catch (error) {
             console.error('[SNESApi] removeLives error:', error);
@@ -128,7 +126,7 @@ class SNESApi {
          */
         giveMushroom: async () => {
           try {
-            const result = await this.expandedOps.giveMushroom();
+            const result = await this.smwOps.giveMushroom();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] giveMushroom error:', error);
@@ -142,7 +140,7 @@ class SNESApi {
          */
         giveFireFlower: async () => {
           try {
-            const result = await this.expandedOps.giveFireFlower();
+            const result = await this.smwOps.giveFireFlower();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] giveFireFlower error:', error);
@@ -156,7 +154,7 @@ class SNESApi {
          */
         giveCapeFeather: async () => {
           try {
-            const result = await this.expandedOps.giveCapeFeather();
+            const result = await this.smwOps.giveCapeFeather();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] giveCapeFeather error:', error);
@@ -171,7 +169,7 @@ class SNESApi {
          */
         giveStarman: async (duration = 20) => {
           try {
-            const result = await this.expandedOps.giveStarman(duration);
+            const result = await this.smwOps.giveStarman(duration);
             return result.success;
           } catch (error) {
             console.error('[SNESApi] giveStarman error:', error);
@@ -185,7 +183,7 @@ class SNESApi {
          */
         removePowerup: async () => {
           try {
-            const result = await this.expandedOps.removePowerup();
+            const result = await this.smwOps.removePowerup();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] removePowerup error:', error);
@@ -201,7 +199,7 @@ class SNESApi {
          */
         killPlayer: async () => {
           try {
-            const result = await this.gameOps.killPlayer();
+            const result = await this.smwOps.killPlayer();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] killPlayer error:', error);
@@ -215,7 +213,7 @@ class SNESApi {
          */
         freezePlayer: async () => {
           try {
-            const result = await this.hoellOps.freezePlayer();
+            const result = await this.smwOps.freezePlayer();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] freezePlayer error:', error);
@@ -229,7 +227,7 @@ class SNESApi {
          */
         unfreezePlayer: async () => {
           try {
-            const result = await this.hoellOps.unfreezePlayer();
+            const result = await this.smwOps.unfreezePlayer();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] unfreezePlayer error:', error);
@@ -245,7 +243,7 @@ class SNESApi {
          */
         kickRight: async () => {
           try {
-            const result = await this.hoellOps.kickRight();
+            const result = await this.smwOps.kickRight();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] kickRight error:', error);
@@ -259,7 +257,7 @@ class SNESApi {
          */
         kickLeft: async () => {
           try {
-            const result = await this.hoellOps.kickLeft();
+            const result = await this.smwOps.kickLeft();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] kickLeft error:', error);
@@ -273,7 +271,7 @@ class SNESApi {
          */
         kickUp: async () => {
           try {
-            const result = await this.hoellOps.kickUp();
+            const result = await this.smwOps.kickUp();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] kickUp error:', error);
@@ -288,7 +286,7 @@ class SNESApi {
          */
         pushRight: async (speed = 32) => {
           try {
-            const result = await this.hoellOps.pushRight(speed);
+            const result = await this.smwOps.pushRight(speed);
             return result.success;
           } catch (error) {
             console.error('[SNESApi] pushRight error:', error);
@@ -303,7 +301,7 @@ class SNESApi {
          */
         pushLeft: async (speed = 32) => {
           try {
-            const result = await this.hoellOps.pushLeft(speed);
+            const result = await this.smwOps.pushLeft(speed);
             return result.success;
           } catch (error) {
             console.error('[SNESApi] pushLeft error:', error);
@@ -319,7 +317,7 @@ class SNESApi {
          */
         modifySpeed: async (multiplier, duration = 30) => {
           try {
-            const result = await this.expandedOps.modifyMarioSpeed(multiplier, duration);
+            const result = await this.smwOps.modifyMarioSpeed(multiplier, duration);
             return result.success;
           } catch (error) {
             console.error('[SNESApi] modifySpeed error:', error);
@@ -335,7 +333,7 @@ class SNESApi {
          */
         setWaterMode: async () => {
           try {
-            const result = await this.hoellOps.setWaterMode();
+            const result = await this.smwOps.setWaterMode();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] setWaterMode error:', error);
@@ -349,7 +347,7 @@ class SNESApi {
          */
         setLandMode: async () => {
           try {
-            const result = await this.hoellOps.setLandMode();
+            const result = await this.smwOps.setLandMode();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] setLandMode error:', error);
@@ -364,7 +362,7 @@ class SNESApi {
          */
         setWaterModeTimed: async (duration = 30) => {
           try {
-            const result = await this.hoellOps.setWaterModeTimed(duration);
+            const result = await this.smwOps.setWaterModeTimed(duration);
             return result.success;
           } catch (error) {
             console.error('[SNESApi] setWaterModeTimed error:', error);
@@ -378,7 +376,7 @@ class SNESApi {
          */
         setIceMode: async () => {
           try {
-            const result = await this.hoellOps.setIceMode();
+            const result = await this.smwOps.setIceMode();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] setIceMode error:', error);
@@ -392,7 +390,7 @@ class SNESApi {
          */
         setDryMode: async () => {
           try {
-            const result = await this.hoellOps.setDryMode();
+            const result = await this.smwOps.setDryMode();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] setDryMode error:', error);
@@ -407,7 +405,7 @@ class SNESApi {
          */
         setIceModeTimed: async (duration = 30) => {
           try {
-            const result = await this.hoellOps.setIceModeTimed(duration);
+            const result = await this.smwOps.setIceModeTimed(duration);
             return result.success;
           } catch (error) {
             console.error('[SNESApi] setIceModeTimed error:', error);
@@ -424,7 +422,7 @@ class SNESApi {
          */
         activatePSwitch: async (duration = 20) => {
           try {
-            const result = await this.expandedOps.activatePSwitch(duration);
+            const result = await this.smwOps.activatePSwitch(duration);
             return result.success;
           } catch (error) {
             console.error('[SNESApi] activatePSwitch error:', error);
@@ -439,7 +437,7 @@ class SNESApi {
          */
         activateSilverPSwitch: async (duration = 255) => {
           try {
-            const result = await this.hoellOps.activateSilverPSwitch(duration);
+            const result = await this.smwOps.activateSilverPSwitch(duration);
             return result.success;
           } catch (error) {
             console.error('[SNESApi] activateSilverPSwitch error:', error);
@@ -453,7 +451,7 @@ class SNESApi {
          */
         spawnSilverPSwitch: async () => {
           try {
-            const result = await this.hoellOps.spawnSilverPSwitch();
+            const result = await this.smwOps.spawnSilverPSwitch();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] spawnSilverPSwitch error:', error);
@@ -469,7 +467,7 @@ class SNESApi {
          */
         spawnRandomEnemy: async () => {
           try {
-            const result = await this.hoellOps.spawnRandomEnemy();
+            const result = await this.smwOps.spawnRandomEnemy();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] spawnRandomEnemy error:', error);
@@ -483,7 +481,7 @@ class SNESApi {
          */
         spawnGreenKoopa: async () => {
           try {
-            const result = await this.hoellOps.spawnGreenKoopa();
+            const result = await this.smwOps.spawnGreenKoopa();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] spawnGreenKoopa error:', error);
@@ -497,7 +495,7 @@ class SNESApi {
          */
         spawnRedKoopa: async () => {
           try {
-            const result = await this.hoellOps.spawnRedKoopa();
+            const result = await this.smwOps.spawnRedKoopa();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] spawnRedKoopa error:', error);
@@ -511,7 +509,7 @@ class SNESApi {
          */
         spawnGoomba: async () => {
           try {
-            const result = await this.hoellOps.spawnGoomba();
+            const result = await this.smwOps.spawnGoomba();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] spawnGoomba error:', error);
@@ -525,7 +523,7 @@ class SNESApi {
          */
         spawnBobOmb: async () => {
           try {
-            const result = await this.hoellOps.spawnBobOmb();
+            const result = await this.smwOps.spawnBobOmb();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] spawnBobOmb error:', error);
@@ -539,7 +537,7 @@ class SNESApi {
          */
         spawnBoo: async () => {
           try {
-            const result = await this.hoellOps.spawnBoo();
+            const result = await this.smwOps.spawnBoo();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] spawnBoo error:', error);
@@ -555,7 +553,7 @@ class SNESApi {
          */
         warpToRandomLevel: async () => {
           try {
-            const result = await this.expandedOps.warpToRandomLevel();
+            const result = await this.smwOps.warpToRandomLevel();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] warpToRandomLevel error:', error);
@@ -569,7 +567,7 @@ class SNESApi {
          */
         warpToWorld1: async () => {
           try {
-            const result = await this.expandedOps.warpToWorld1();
+            const result = await this.smwOps.warpToWorld1();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] warpToWorld1 error:', error);
@@ -583,7 +581,7 @@ class SNESApi {
          */
         warpToBowserCastle: async () => {
           try {
-            const result = await this.expandedOps.warpToBowserCastle();
+            const result = await this.smwOps.warpToBowserCastle();
             return result.success;
           } catch (error) {
             console.error('[SNESApi] warpToBowserCastle error:', error);

@@ -37,7 +37,6 @@ const IPC_CHANNELS = {
 
   // Operations
   EXECUTE_SMW_OPERATION: 'execute-smw-operation',
-  EXECUTE_ZELDA_OPERATION: 'execute-zelda-operation',
 
   // Lua Connector
   CONNECT_LUA: 'connect-lua',
@@ -121,7 +120,6 @@ let mainWindow;
 let actionConsoleWindow = null;
 let sniClient;
 let luaClient;  // Lua connector client for emulator mode
-let zeldaOps;
 let smwOps;
 let luaGameOps;      // Lua game operations wrapper
 let luaExpandedOps;  // Lua expanded operations wrapper
@@ -237,7 +235,6 @@ function createWindow() {
 
   // Initialize SNI client after window is created
   const SNIClient = require('./src/sni/client');
-  const ZeldaOperations = require('./src/sni/operations-zelda');
   const SMWOperations = require('./src/sni/operations-smw');
   const LuaConnectorClient = require('./src/emulator/lua-connector-client');
   const { LuaGameOperations, LuaExpandedOperations, LuaHoellOperations } = require('./src/emulator/lua-operations');
@@ -261,7 +258,6 @@ function createWindow() {
 
   // Initialize SNI client and operations
   sniClient = new SNIClient();
-  zeldaOps = new ZeldaOperations(sniClient);
   smwOps = new SMWOperations(sniClient);
   console.log('🎮 SNI operations initialized');
 
@@ -306,8 +302,8 @@ function createWindow() {
   }
 
   // Initialize HoellStream poller (but don't start polling yet)
-  // Pass both smwOps and zeldaOps (basic operations like KO player)
-  hoellPoller = new HoellStreamPoller(smwOps, zeldaOps, {
+  // Pass smwOps only
+  hoellPoller = new HoellStreamPoller(smwOps, {
     pollIntervalMs: 2000,
     debugMode: true,
     giftDatabase: giftDatabase
@@ -318,7 +314,7 @@ function createWindow() {
   hoellPoller.setRestorationManager(restorationManager);
 
   // Initialize EventProcessor
-  eventProcessor = new EventProcessor(smwOps, zeldaOps, {
+  eventProcessor = new EventProcessor(smwOps, {
     debugMode: true,
     giftDatabase: giftDatabase
   });
@@ -341,7 +337,7 @@ function createWindow() {
   console.log('🎁 TikFinity WebSocket client initialized');
 
   // Initialize Lua Scripting (SNESApi + ScriptEngine)
-  snesAPI = new SNESApi(sniClient, zeldaOps, smwOps, smwOps);
+  snesAPI = new SNESApi(sniClient, smwOps);
   console.log('📜 SNESApi initialized');
 
   scriptEngine = new ScriptEngine({
@@ -443,54 +439,6 @@ ipcMain.handle('execute-smw-operation', async (event, operationName, ...args) =>
     throw new Error(`Unknown operation: ${operationName}`);
   } catch (error) {
     console.error(`Error executing ${operationName}:`, error);
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle('add-heart', async () => {
-  try {
-    if (!sniClient.deviceURI) {
-      throw new Error('No device selected');
-    }
-    return await zeldaOps.addHeartContainer();
-  } catch (error) {
-    console.error('Add heart error:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle('remove-heart', async () => {
-  try {
-    if (!sniClient.deviceURI) {
-      throw new Error('No device selected');
-    }
-    return await zeldaOps.removeHeartContainer();
-  } catch (error) {
-    console.error('Remove heart error:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle('kill-player', async () => {
-  try {
-    if (!sniClient.deviceURI) {
-      throw new Error('No device selected');
-    }
-    return await zeldaOps.killPlayer();
-  } catch (error) {
-    console.error('KO player error:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle('warp-eastern', async () => {
-  try {
-    if (!sniClient.deviceURI) {
-      throw new Error('No device selected');
-    }
-    return await zeldaOps.warpToEasternPalace();
-  } catch (error) {
-    console.error('Warp error:', error);
     return { success: false, error: error.message };
   }
 });
@@ -2552,8 +2500,8 @@ ipcMain.handle('set-connection-mode', async (event, mode) => {
       luaExpandedOps = new LuaExpandedOperations(luaClient);
       luaHoellOps = new LuaHoellOperations(luaClient);
 
-      // Update SNES API to use Lua operations
-      snesAPI = new SNESApi(luaClient, luaGameOps, luaExpandedOps, luaHoellOps);
+      // Update SNES API to use Lua operations (pass luaExpandedOps as the unified operations)
+      snesAPI = new SNESApi(luaClient, luaExpandedOps);
 
       // Update ScriptEngine with new API
       if (scriptEngine) {
@@ -2562,13 +2510,13 @@ ipcMain.handle('set-connection-mode', async (event, mode) => {
 
       // Update EventProcessor with Lua operations
       if (eventProcessor) {
-        eventProcessor.updateOperations(luaExpandedOps, luaGameOps);
+        eventProcessor.updateOperations(luaExpandedOps);
       }
 
       console.log('✅ Switched to Lua connector operations');
     } else {
       // Switch back to SNI operations
-      snesAPI = new SNESApi(sniClient, zeldaOps, smwOps, smwOps);
+      snesAPI = new SNESApi(sniClient, smwOps);
 
       // Update ScriptEngine with new API
       if (scriptEngine) {
@@ -2577,7 +2525,7 @@ ipcMain.handle('set-connection-mode', async (event, mode) => {
 
       // Update EventProcessor with SNI operations
       if (eventProcessor) {
-        eventProcessor.updateOperations(smwOps, zeldaOps);
+        eventProcessor.updateOperations(smwOps);
       }
 
       console.log('✅ Switched to SNI operations');
@@ -2713,7 +2661,7 @@ ipcMain.handle('execute-gift-action', async (event, actionData) => {
 
     // Use current connection mode operations
     const ops = connectionMode === 'lua' ? luaExpandedOps : smwOps;
-    const basicOps = connectionMode === 'lua' ? luaGameOps : zeldaOps;
+    const basicOps = connectionMode === 'lua' ? luaGameOps : smwOps;
 
     // Check which operations object has the action
     let targetOps = null;
