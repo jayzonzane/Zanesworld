@@ -777,3 +777,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Export functions that may be needed by other modules
 export { openGiftSettings, initDatabaseUpdatesTab };
+
+// Expose functions globally for non-module scripts
+window.openGiftSettings = openGiftSettings;
+window.populateGiftDatabase = GiftDatabase.populateGiftDatabase;
+window.initDatabaseUpdatesTab = initDatabaseUpdatesTab;
