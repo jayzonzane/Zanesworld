@@ -1,10 +1,102 @@
+/**
+ * ZanesWorld Main Process - Electron Application Entry Point
+ *
+ * Manages:
+ * - Electron window creation and lifecycle
+ * - SNI client connection for hardware console integration
+ * - Lua connector for emulator integration
+ * - HoellStream and TikFinity gift source polling
+ * - IPC communication between main and renderer processes
+ * - Gift event processing and game operations execution
+ *
+ * @module main
+ * @requires electron
+ * @requires ./src/sni/client
+ * @requires ./src/emulator/lua-connector-client
+ * @requires ./src/hoellstream/poller
+ * @requires ./src/tikfinity/websocket-client
+ * @requires ./src/gift-sources/event-processor
+ */
+
 const { app, BrowserWindow, ipcMain, protocol, net } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs').promises;
 const crypto = require('crypto');
 
-// Utility: Safe JSON parsing with detailed error messages
+// ============================================================================
+// CONSTANTS - IPC Channel Names
+// ============================================================================
+
+const IPC_CHANNELS = {
+  // SNI Connection
+  CONNECT_SNI: 'connect-sni',
+  DISCONNECT_SNI: 'disconnect-sni',
+  LIST_SNI_DEVICES: 'list-sni-devices',
+  SELECT_SNI_DEVICE: 'select-sni-device',
+
+  // Operations
+  EXECUTE_SMW_OPERATION: 'execute-smw-operation',
+  EXECUTE_ZELDA_OPERATION: 'execute-zelda-operation',
+
+  // Lua Connector
+  CONNECT_LUA: 'connect-lua',
+  DISCONNECT_LUA: 'disconnect-lua',
+
+  // Gift Sources
+  START_HOELLSTREAM_POLLING: 'start-hoellstream-polling',
+  STOP_HOELLSTREAM_POLLING: 'stop-hoellstream-polling',
+  CONNECT_TIKFINITY: 'connect-tikfinity',
+  DISCONNECT_TIKFINITY: 'disconnect-tikfinity',
+
+  // Settings
+  SAVE_GIFT_MAPPINGS: 'save-gift-mappings',
+  LOAD_GIFT_MAPPINGS: 'load-gift-mappings',
+  SAVE_THRESHOLD_CONFIGS: 'save-threshold-configs',
+  LOAD_THRESHOLD_CONFIGS: 'load-threshold-configs',
+
+  // Scripts
+  SAVE_SCRIPT: 'save-script',
+  LOAD_SCRIPTS: 'load-scripts',
+  DELETE_SCRIPT: 'delete-script',
+  TEST_SCRIPT: 'test-script'
+};
+
+// ============================================================================
+// CONSTANTS - Error Messages
+// ============================================================================
+
+const ERROR_MESSAGES = {
+  NO_DEVICE: 'No device selected',
+  UNKNOWN_OPERATION: 'Unknown operation',
+  CONNECTION_FAILED: 'Connection failed',
+  INVALID_PARAMETERS: 'Invalid parameters provided'
+};
+
+// ============================================================================
+// CONSTANTS - File Paths
+// ============================================================================
+
+const FILE_PATHS = {
+  GIFT_MAPPINGS: path.join(app.getPath('userData'), 'gift-mappings.json'),
+  THRESHOLDS: path.join(app.getPath('userData'), 'thresholds.json'),
+  WINDOW_SETTINGS: path.join(app.getPath('userData'), 'window-settings.json'),
+  SCRIPTS_DIR: path.join(app.getPath('userData'), 'scripts'),
+  GIFT_NAME_OVERRIDES: path.join(app.getPath('userData'), 'gift-name-overrides.json')
+};
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
+
+/**
+ * Safe JSON parsing with detailed error messages
+ *
+ * @param {string} jsonString - JSON string to parse
+ * @param {*} fallback - Fallback value if parsing fails
+ * @param {string} context - Context description for error logging
+ * @returns {*} Parsed JSON or fallback value
+ */
 function safeJSONParse(jsonString, fallback = null, context = 'unknown') {
   try {
     return JSON.parse(jsonString);
@@ -15,7 +107,11 @@ function safeJSONParse(jsonString, fallback = null, context = 'unknown') {
   }
 }
 
-// Utility: Generate cryptographically secure random ID
+/**
+ * Generate cryptographically secure random ID
+ *
+ * @returns {string} 32-character hexadecimal ID
+ */
 function generateSecureId() {
   return crypto.randomBytes(16).toString('hex');
 }
@@ -98,7 +194,7 @@ function createWindow() {
   };
 
   try {
-    const savedBounds = require('fs').readFileSync(WINDOW_SETTINGS_FILE, 'utf8');
+    const savedBounds = require('fs').readFileSync(FILE_PATHS.WINDOW_SETTINGS, 'utf8');
     const parsedBounds = JSON.parse(savedBounds);
     // Merge saved bounds with defaults
     windowBounds = { ...windowBounds, ...parsedBounds };
@@ -123,7 +219,7 @@ function createWindow() {
   // Save window bounds when moved or resized
   const saveWindowBounds = () => {
     const bounds = mainWindow.getBounds();
-    require('fs').writeFileSync(WINDOW_SETTINGS_FILE, JSON.stringify(bounds, null, 2), 'utf8');
+    require('fs').writeFileSync(FILE_PATHS.WINDOW_SETTINGS, JSON.stringify(bounds, null, 2), 'utf8');
   };
 
   // Debounce to avoid excessive file writes
@@ -1334,13 +1430,16 @@ const https = require('https');
 //   Windows: C:\Users\{user}\AppData\Roaming\snes-controller\gift-mappings.json
 //   macOS: ~/Library/Application Support/snes-controller/gift-mappings.json
 //   Linux: ~/.config/snes-controller/gift-mappings.json
-const GIFT_MAPPINGS_FILE = pathModule.join(app.getPath('userData'), 'gift-mappings.json');
+// Legacy constant - now uses FILE_PATHS.GIFT_MAPPINGS
+const GIFT_MAPPINGS_FILE = FILE_PATHS.GIFT_MAPPINGS;
 const GIFT_NAME_OVERRIDES_FILE = pathModule.join(app.getPath('userData'), 'gift-name-overrides.json');
+// Legacy constant definitions moved to FILE_PATHS at top of file
+// These are kept here temporarily for compatibility, but reference the new constants
 const CUSTOM_GIFTS_FILE = pathModule.join(app.getPath('userData'), 'custom-gifts.json');
 const GIFT_IMAGE_OVERRIDES_FILE = pathModule.join(app.getPath('userData'), 'gift-image-overrides.json');
-const THRESHOLD_CONFIGS_FILE = pathModule.join(app.getPath('userData'), 'threshold-configs.json');
+const THRESHOLD_CONFIGS_FILE = FILE_PATHS.THRESHOLDS;
 const OVERLAY_SETTINGS_FILE = pathModule.join(app.getPath('userData'), 'overlay-settings.json');
-const WINDOW_SETTINGS_FILE = pathModule.join(app.getPath('userData'), 'window-settings.json');
+const WINDOW_SETTINGS_FILE = FILE_PATHS.WINDOW_SETTINGS;
 
 // Load gift mappings on startup
 async function loadGiftMappingsOnStartup() {

@@ -1,10 +1,41 @@
 /**
- * EventProcessor
- * Source-agnostic gift event processing logic shared between HoellStream and TikFinity
+ * EventProcessor - Source-Agnostic Gift Event Processing
+ *
+ * Unified gift event processing logic shared between HoellStream and TikFinity.
+ * Handles:
+ * - Event normalization from multiple sources
+ * - Gift mapping to game operations
+ * - Threshold tracking (count-based and value-based)
+ * - Script execution for custom gift actions
+ * - Duplicate event detection
+ *
+ * @module event-processor
+ * @requires ../utils/logger
+ *
+ * @example
+ * const EventProcessor = require('./event-processor');
+ * const processor = new EventProcessor(gameOps, basicOps, { debugMode: true });
+ * processor.updateMappings(giftMappings);
+ * await processor.processEvent(normalizedEvent);
  */
+
 const logger = require('../utils/logger');
 
+/**
+ * EventProcessor class - Processes gift events from multiple sources
+ *
+ * @class EventProcessor
+ */
 class EventProcessor {
+  /**
+   * Create an EventProcessor instance
+   *
+   * @param {Object} gameOperations - Game operations instance (expandedOps)
+   * @param {Object} basicOperations - Basic operations instance (gameOps)
+   * @param {Object} config - Configuration options
+   * @param {boolean} config.debugMode - Enable debug logging (default true)
+   * @param {Object} config.giftDatabase - TikTok gift database for coin value lookups
+   */
   constructor(gameOperations, basicOperations, config = {}) {
     this.gameOps = gameOperations;  // expandedOps
     this.basicOps = basicOperations; // gameOps (has KO player)
@@ -63,6 +94,8 @@ class EventProcessor {
 
   /**
    * Set the restoration manager (called from main.js after initialization)
+   *
+   * @param {ItemRestorationManager} restorationManager - Restoration manager instance
    */
   setRestorationManager(restorationManager) {
     this.restorationManager = restorationManager;
@@ -71,6 +104,8 @@ class EventProcessor {
 
   /**
    * Set the script engine (called from main.js after initialization)
+   *
+   * @param {ScriptEngine} scriptEngine - Script engine instance for Lua execution
    */
   setScriptEngine(scriptEngine) {
     this.scriptEngine = scriptEngine;
@@ -79,6 +114,8 @@ class EventProcessor {
 
   /**
    * Set the main window for event emission (called from main.js after initialization)
+   *
+   * @param {BrowserWindow} mainWindow - Electron main window instance
    */
   setMainWindow(mainWindow) {
     this.mainWindow = mainWindow;
@@ -87,6 +124,8 @@ class EventProcessor {
 
   /**
    * Set the action console window for event emission (called from main.js when popup opens)
+   *
+   * @param {BrowserWindow} actionConsoleWindow - Action console window instance
    */
   setActionConsoleWindow(actionConsoleWindow) {
     this.actionConsoleWindow = actionConsoleWindow;
@@ -95,6 +134,11 @@ class EventProcessor {
 
   /**
    * Load gift name overrides from file
+   *
+   * @param {Object} overrides - Gift name overrides map (format: "coinValue-originalName" -> "overriddenName")
+   *
+   * @example
+   * await processor.loadGiftNameOverrides({ "1-Rose": "Flower" });
    */
   async loadGiftNameOverrides(overrides) {
     this.giftNameOverrides = overrides || {};
@@ -116,6 +160,13 @@ class EventProcessor {
    * Resolve gift name for mapping lookup
    * If the gift name is an override (new name), return the original name for mapping lookup
    * Otherwise return the name as-is
+   *
+   * @param {string} giftName - Gift name to resolve
+   * @returns {string} Original gift name for mapping lookup
+   *
+   * @example
+   * const originalName = processor.resolveGiftNameForMapping("Flower");
+   * // Returns "Rose" if "Flower" is an override for "Rose"
    */
   resolveGiftNameForMapping(giftName) {
     // First, check if this is an overridden name (new name)
@@ -131,6 +182,9 @@ class EventProcessor {
 
   /**
    * Update game operations (called when switching between SNI and Lua connector)
+   *
+   * @param {Object} gameOperations - Game operations instance (expandedOps)
+   * @param {Object} basicOperations - Basic operations instance (gameOps)
    */
   updateOperations(gameOperations, basicOperations) {
     this.gameOps = gameOperations;  // expandedOps
@@ -142,6 +196,8 @@ class EventProcessor {
 
   /**
    * Set start time for filtering old events
+   *
+   * @param {Date} startTime - Processing start timestamp
    */
   setStartTime(startTime) {
     this.startTime = startTime;
@@ -151,6 +207,13 @@ class EventProcessor {
   /**
    * Look up coin value for a gift name from TIKTOK_GIFTS database
    * Uses O(1) Map lookup instead of O(n) linear search
+   *
+   * @param {string} giftName - Gift name to lookup
+   * @returns {number} Coin value for the gift (0 if not found)
+   *
+   * @example
+   * const value = processor.getGiftCoinValue("Rose");
+   * console.log(`Rose costs ${value} coins`);
    */
   getGiftCoinValue(giftName) {
     // Check if database is loaded
@@ -172,6 +235,11 @@ class EventProcessor {
 
   /**
    * Update gift database and rebuild index (called when database changes)
+   *
+   * @param {Object} database - Gift database object (format: { coinValue: [giftNames] })
+   *
+   * @example
+   * processor.loadGiftDatabase({ "1": ["Rose", "Heart"], "5": ["Panda"] });
    */
   loadGiftDatabase(database) {
     this.giftDatabase = database;
@@ -187,6 +255,11 @@ class EventProcessor {
 
   /**
    * Update gift mappings (called when settings are saved)
+   *
+   * @param {Object} mappings - Gift mappings object (giftName -> mapping config)
+   *
+   * @example
+   * processor.updateMappings({ "Rose": { action: "giveMushroom", type: "operation" } });
    */
   updateMappings(mappings) {
     this.giftMappings = mappings;
@@ -195,6 +268,13 @@ class EventProcessor {
 
   /**
    * Normalize TikFinity event to HoellStream format
+   *
+   * @param {Object} tikfinityEvent - Raw TikFinity event object
+   * @returns {Object|null} Normalized event or null if invalid
+   *
+   * @example
+   * const normalized = processor.normalizeTikFinityEvent(rawEvent);
+   * if (normalized) await processor.processEvent(normalized);
    */
   normalizeTikFinityEvent(tikfinityEvent) {
     // Log all incoming TikFinity events for debugging
@@ -246,6 +326,23 @@ class EventProcessor {
 
   /**
    * Process a single event (source-agnostic)
+   *
+   * @param {Object} event - Normalized event object
+   * @param {string} event.id - Unique event ID
+   * @param {string} event.giftName - Gift name
+   * @param {number} event.amount - Gift amount/multiplier
+   * @param {string} event.displayName - User display name
+   * @param {string} event.source - Event source (hoellstream/tikfinity)
+   * @returns {Promise<void>}
+   *
+   * @example
+   * await processor.processEvent({
+   *   id: "evt_123",
+   *   giftName: "Rose",
+   *   amount: 1,
+   *   displayName: "User123",
+   *   source: "tikfinity"
+   * });
    */
   async processEvent(event) {
     console.log('🔍 [EventProcessor.processEvent] Called!');

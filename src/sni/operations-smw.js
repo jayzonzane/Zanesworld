@@ -1,19 +1,96 @@
 /**
- * SMW Operations - Comprehensive Game Operations
+ * Super Mario World Operations
  *
- * Merged from:
- * - operations-working.js (physics chaos, basic power-ups)
- * - operations-expanded.js (enemy spawning, sprite management)
- * - operations-hoellcc.js (environmental, MarioMod, kaizo)
+ * Complete SMW operations manager with 120+ methods organized into 13 categories:
+ * - Power-Up Management, Environmental Physics, Speed Control, Physics Chaos,
+ * - Basic Enemy Spawning, MarioMod Enemy Spawning, Power-Up Spawning,
+ * - Helper Item Spawning, Level Navigation, Kaizo Operations, Chaos Effects,
+ * - Silver P-Switch, and Cleanup utilities.
  *
- * Total: ~120 operations organized into 13 categories
+ * Requires:
+ * - SNI client connection
+ * - MarioMod ASM patch for advanced operations
+ *
+ * @module operations-smw
+ * @requires ./memory-complete
+ * @requires ./mariomod-spawner
+ *
+ * @example
+ * const SMWOperations = require('./operations-smw');
+ * const smwOps = new SMWOperations(sniClient);
+ * await smwOps.giveMushroom();
+ * await smwOps.moonJump(30);
  */
 
 const { MEMORY_ADDRESSES, POWERUP_TYPES, RESERVE_ITEMS, YOSHI_COLORS, SPRITE_TYPES, GAME_MODES, CONTROLLER_BUTTONS } = require('./memory-complete');
 const MarioModSpawner = require('./mariomod-spawner');
 const logger = require('../utils/logger');
 
+// Physics Constants
+const PHYSICS_MODIFIERS = {
+  HALF_SPEED: 0.5,
+  DOUBLE_SPEED: 3.0,
+  MOON_JUMP_MULTIPLIER: 2.0,
+  TINY_JUMP_MULTIPLIER: 0.3,
+  LOW_GRAVITY: 0.5,
+  HIGH_GRAVITY: 1.5,
+  ICE_FRICTION: 0.98
+};
+
+// Timer Constants (in seconds)
+const TIMER_DURATIONS = {
+  DEFAULT_EFFECT: 30,
+  SHORT_EFFECT: 10,
+  MEDIUM_EFFECT: 20,
+  LONG_EFFECT: 60
+};
+
+// Pixel Offsets for Spawn Positions
+const SPAWN_OFFSETS = {
+  CLOSE: 8,
+  NEAR: 16,
+  MEDIUM: 32,
+  FAR: 48,
+  VERY_FAR: 64,
+  EXTREME: 80,
+  BULLET_DISTANCE: 96,
+  CIRCLE_RADIUS: 64
+};
+
+// Speed Values (signed bytes for SNES memory)
+const SPEED_VALUES = {
+  KICK_RIGHT_X: 64,
+  KICK_LEFT_X: 192,
+  KICK_UP_Y: 192,
+  KICK_Y: 224,
+  PUSH_DEFAULT: 32,
+  RUN_MIN: 32,
+  RUN_FORCED: 40,
+  WALK_MAX: 16,
+  P_METER_FULL: 112
+};
+
+// Miscellaneous Constants
+const MISC_CONSTANTS = {
+  MAX_SPRITE_SLOTS: 12,
+  MAX_OAM_SPRITES: 128,
+  SPRITE_INVISIBLE_Y: 240,
+  MAX_KAIZO_BLOCKS: 100,
+  KAIZO_TIMEOUT: 10000,
+  SNI_DELAY_MS: 50
+};
+
+/**
+ * SMWOperations class - Provides comprehensive Super Mario World game manipulation
+ *
+ * @class SMWOperations
+ */
 class SMWOperations {
+  /**
+   * Create an SMWOperations instance
+   *
+   * @param {SNIClient} sniClient - Connected SNI client instance
+   */
   constructor(sniClient) {
     this.sniClient = sniClient;
     this.client = sniClient; // Alias for compatibility
@@ -38,6 +115,18 @@ class SMWOperations {
   // SECTION 1: HELPER METHODS
   // ============================================================================
 
+  /**
+   * Read memory with automatic retry on failure
+   *
+   * @param {number} address - Memory address to read from
+   * @param {number} length - Number of bytes to read
+   * @param {number} attempts - Maximum retry attempts
+   * @returns {Promise<Buffer>} Memory data as Buffer
+   * @throws {Error} After all retry attempts fail
+   *
+   * @example
+   * const data = await smwOps.readWithRetry(0x7E0019, 1, 3);
+   */
   async readWithRetry(address, length, attempts = 3) {
     for (let i = 0; i < attempts; i++) {
       try {
@@ -49,6 +138,18 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Write memory with automatic retry on failure
+   *
+   * @param {number} address - Memory address to write to
+   * @param {Buffer} data - Data to write
+   * @param {number} attempts - Maximum retry attempts
+   * @returns {Promise<void>}
+   * @throws {Error} After all retry attempts fail
+   *
+   * @example
+   * await smwOps.writeWithRetry(0x7E0019, Buffer.from([0x01]));
+   */
   async writeWithRetry(address, data, attempts = 3) {
     for (let i = 0; i < attempts; i++) {
       try {
@@ -60,6 +161,15 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Get Mario's current position in the level
+   *
+   * @returns {Promise<{x: number, y: number}>} Mario's position as 16-bit coordinates
+   *
+   * @example
+   * const pos = await smwOps.getMarioPosition();
+   * console.log(`Mario at (${pos.x}, ${pos.y})`);
+   */
   async getMarioPosition() {
     try {
       const xLow = await this.readWithRetry(MEMORY_ADDRESSES.PLAYER_X_POSITION, 1);
@@ -77,10 +187,19 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Find the first available empty sprite slot
+   *
+   * @returns {Promise<number>} Sprite slot index (0-11) or -1 if all slots occupied
+   *
+   * @example
+   * const slot = await smwOps.findEmptySpriteSlot();
+   * if (slot !== -1) console.log(`Found empty slot: ${slot}`);
+   */
   async findEmptySpriteSlot() {
     try {
-      const statusArray = await this.readWithRetry(MEMORY_ADDRESSES.SPRITE_STATUS, 12);
-      for (let i = 0; i < 12; i++) {
+      const statusArray = await this.readWithRetry(MEMORY_ADDRESSES.SPRITE_STATUS, MISC_CONSTANTS.MAX_SPRITE_SLOTS);
+      for (let i = 0; i < MISC_CONSTANTS.MAX_SPRITE_SLOTS; i++) {
         if (statusArray[i] === 0x00) {
           return i;
         }
@@ -92,6 +211,18 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Spawn a sprite at a specific position
+   *
+   * @param {number} spriteType - Sprite type ID (see SPRITE_TYPES)
+   * @param {number} x - X coordinate (16-bit)
+   * @param {number} y - Y coordinate (16-bit)
+   * @param {number|null} slotIndex - Optional sprite slot, auto-finds if null
+   * @returns {Promise<number|boolean>} Sprite slot index on success, false on failure
+   *
+   * @example
+   * await smwOps.spawnSpriteAtPosition(SPRITE_TYPES.GOOMBA, 100, 200);
+   */
   async spawnSpriteAtPosition(spriteType, x, y, slotIndex = null) {
     try {
       if (slotIndex === null) {
@@ -130,6 +261,15 @@ class SMWOperations {
   // Source: operations-working.js (preferred for direct memory manipulation)
   // ============================================================================
 
+  /**
+   * Set Mario's current power-up state
+   *
+   * @param {number} powerupType - Power-up type (see POWERUP_TYPES constants)
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.setMarioPowerup(POWERUP_TYPES.FIRE);
+   */
   async setMarioPowerup(powerupType) {
     try {
       await this.writeWithRetry(MEMORY_ADDRESSES.POWERUP_STATUS, Buffer.from([powerupType]));
@@ -141,6 +281,15 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Give Mario a Mushroom power-up
+   * Upgrades Small Mario to Super, or adds to reserve if already Super
+   *
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.giveMushroom();
+   */
   async giveMushroom() {
     try {
       const current = await this.readWithRetry(MEMORY_ADDRESSES.POWERUP_STATUS, 1);
@@ -158,6 +307,14 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Give Mario a Fire Flower power-up
+   *
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.giveFireFlower();
+   */
   async giveFireFlower() {
     try {
       await this.setMarioPowerup(POWERUP_TYPES.FIRE);
@@ -169,6 +326,14 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Give Mario a Cape Feather power-up
+   *
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.giveCapeFeather();
+   */
   async giveCapeFeather() {
     try {
       await this.setMarioPowerup(POWERUP_TYPES.CAPE);
@@ -180,6 +345,15 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Give Mario invincibility (Star power)
+   *
+   * @param {number} duration - Duration in seconds (default 20)
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.giveStarman(30);
+   */
   async giveStarman(duration = 20) {
     try {
       const starDuration = Math.min(duration * 4, 255);
@@ -192,6 +366,14 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Remove Mario's power-up (revert to Small Mario)
+   *
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.removePowerup();
+   */
   async removePowerup() {
     try {
       await this.setMarioPowerup(POWERUP_TYPES.SMALL);
@@ -203,6 +385,15 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Activate a P-Switch
+   *
+   * @param {number} duration - Duration in seconds (default 20)
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.activatePSwitch(30);
+   */
   async activatePSwitch(duration = 20) {
     try {
       const pSwitchDuration = Math.min(duration * 4, 255);
@@ -215,6 +406,15 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Give Mario a Yoshi
+   *
+   * @param {number} color - Yoshi color (see YOSHI_COLORS constants, default GREEN)
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.giveYoshi(YOSHI_COLORS.RED);
+   */
   async giveYoshi(color = YOSHI_COLORS.GREEN) {
     try {
       await this.writeWithRetry(MEMORY_ADDRESSES.YOSHI_COLOR, Buffer.from([color]));
@@ -227,6 +427,14 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Remove Mario's Yoshi
+   *
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.removeYoshi();
+   */
   async removeYoshi() {
     try {
       await this.writeWithRetry(MEMORY_ADDRESSES.YOSHI_COLOR, Buffer.from([0xFF]));
@@ -238,6 +446,15 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Set Mario's reserve item box
+   *
+   * @param {number} itemType - Reserve item type (see RESERVE_ITEMS constants)
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.giveReserveItem(RESERVE_ITEMS.FEATHER);
+   */
   async giveReserveItem(itemType = RESERVE_ITEMS.MUSHROOM) {
     try {
       await this.writeWithRetry(MEMORY_ADDRESSES.RESERVE_ITEM, Buffer.from([itemType]));
@@ -249,6 +466,14 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Clear Mario's reserve item box
+   *
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.clearReserveItem();
+   */
   async clearReserveItem() {
     try {
       await this.writeWithRetry(MEMORY_ADDRESSES.RESERVE_ITEM, Buffer.from([RESERVE_ITEMS.NONE]));
@@ -265,6 +490,15 @@ class SMWOperations {
   // Source: operations-expanded.js (preferred for dual-address writes)
   // ============================================================================
 
+  /**
+   * Add lives to Mario's life counter
+   *
+   * @param {number} count - Number of lives to add (default 1, max 99)
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.addLife(5);
+   */
   async addLife(count = 1) {
     try {
       const current = await this.readWithRetry(MEMORY_ADDRESSES.LIVES, 1);
@@ -279,6 +513,15 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Remove lives from Mario's life counter
+   *
+   * @param {number} count - Number of lives to remove (default 1, min 0)
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.removeLife(2);
+   */
   async removeLife(count = 1) {
     try {
       const current = await this.readWithRetry(MEMORY_ADDRESSES.LIVES, 1);
@@ -293,6 +536,16 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Add coins to Mario's coin counter
+   * Automatically grants 1-ups when reaching 100 coins
+   *
+   * @param {number} amount - Number of coins to add (default 10)
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.addCoins(50);
+   */
   async addCoins(amount = 10) {
     try {
       const current = await this.readWithRetry(MEMORY_ADDRESSES.COINS, 1);
@@ -312,6 +565,15 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Remove coins from Mario's coin counter
+   *
+   * @param {number} amount - Number of coins to remove (default 10, min 0)
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.removeCoins(25);
+   */
   async removeCoins(amount = 10) {
     try {
       const current = await this.readWithRetry(MEMORY_ADDRESSES.COINS, 1);
@@ -412,6 +674,16 @@ class SMWOperations {
   // Source: operations-working.js (superior implementation with bounds checking)
   // ============================================================================
 
+  /**
+   * Modify Mario's horizontal movement speed
+   *
+   * @param {number} multiplier - Speed multiplier (0.5 = half speed, 2.0 = double speed)
+   * @param {number} duration - Duration in seconds (default 30)
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.modifyMarioSpeed(2.0, 60);
+   */
   async modifyMarioSpeed(multiplier, duration = 30) {
     try {
       logger.debug(`[modifyMarioSpeed] Modifying speed by ${multiplier}x for ${duration} seconds`);
@@ -445,14 +717,42 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Slow Mario's movement to half speed
+   *
+   * @param {number} duration - Duration in seconds (default 30)
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.halfSpeed(45);
+   */
   async halfSpeed(duration = 30) {
-    return await this.modifyMarioSpeed(0.5, duration);
+    return await this.modifyMarioSpeed(PHYSICS_MODIFIERS.HALF_SPEED, duration);
   }
 
+  /**
+   * Increase Mario's movement to triple speed
+   *
+   * @param {number} duration - Duration in seconds (default 30)
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.doubleSpeed(30);
+   */
   async doubleSpeed(duration = 30) {
-    return await this.modifyMarioSpeed(3.0, duration);
+    return await this.modifyMarioSpeed(PHYSICS_MODIFIERS.DOUBLE_SPEED, duration);
   }
 
+  /**
+   * Modify Mario's jump height
+   *
+   * @param {number} multiplier - Jump height multiplier (0.3 = tiny, 2.0 = moon jump)
+   * @param {number} duration - Duration in seconds (default 30)
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.modifyJumpHeight(2.5, 60);
+   */
   async modifyJumpHeight(multiplier, duration = 30) {
     try {
       logger.debug(`[modifyJumpHeight] Modifying jump height by ${multiplier}x for ${duration} seconds`);
@@ -483,6 +783,15 @@ class SMWOperations {
     }
   }
 
+  /**
+   * Enable moon jump (high jump with screen-top cap)
+   *
+   * @param {number} duration - Duration in seconds (default 30)
+   * @returns {Promise<boolean>} Success status
+   *
+   * @example
+   * await smwOps.moonJump(60);
+   */
   async moonJump(duration = 30) {
     try {
       logger.debug(`[moonJump] Moon jump for ${duration} seconds - caps at screen top`);

@@ -1,3 +1,21 @@
+/**
+ * The Legend of Zelda: A Link to the Past Operations
+ *
+ * Provides operations for ALTTP including:
+ * - Health and heart container management
+ * - Dungeon warps and level navigation
+ * - Game state reading and monitoring
+ *
+ * @module operations-zelda
+ * @requires ./memory
+ *
+ * @example
+ * const ZeldaOperations = require('./operations-zelda');
+ * const zeldaOps = new ZeldaOperations(sniClient);
+ * await zeldaOps.addHeartContainer();
+ * await zeldaOps.warpToEasternPalace();
+ */
+
 const { MEMORY_ADDRESSES, GAME_MODES } = require('./memory');
 
 /**
@@ -7,10 +25,27 @@ const { MEMORY_ADDRESSES, GAME_MODES } = require('./memory');
  * @class ZeldaOperations
  */
 class ZeldaOperations {
+  /**
+   * Create a ZeldaOperations instance
+   *
+   * @param {SNIClient} sniClient - Connected SNI client instance
+   */
   constructor(sniClient) {
     this.client = sniClient;
   }
 
+  /**
+   * Read memory with automatic retry on failure
+   *
+   * @param {number} address - Memory address to read from
+   * @param {number} size - Number of bytes to read
+   * @param {number} maxAttempts - Maximum retry attempts (default 3)
+   * @returns {Promise<Buffer>} Memory data as Buffer
+   * @throws {Error} After all retry attempts fail
+   *
+   * @example
+   * const data = await zeldaOps.readWithRetry(0xF36C, 1, 3);
+   */
   async readWithRetry(address, size, maxAttempts = 3) {
     let attempts = 0;
     let lastError;
@@ -40,6 +75,16 @@ class ZeldaOperations {
     throw lastError || new Error('Failed to read memory after ' + maxAttempts + ' attempts');
   }
 
+  /**
+   * Get Link's current health
+   *
+   * @returns {Promise<number>} Current health value (8 = 1 heart)
+   * @throws {Error} If memory read fails
+   *
+   * @example
+   * const health = await zeldaOps.getCurrentHealth();
+   * console.log(`Current hearts: ${health / 8}`);
+   */
   async getCurrentHealth() {
     try {
       const health = await this.readWithRetry(MEMORY_ADDRESSES.CURRENT_HEALTH, 1);
@@ -50,6 +95,16 @@ class ZeldaOperations {
     }
   }
 
+  /**
+   * Get Link's maximum health capacity
+   *
+   * @returns {Promise<number>} Maximum health value (8 = 1 heart, max 160 = 20 hearts)
+   * @throws {Error} If memory read fails
+   *
+   * @example
+   * const maxHealth = await zeldaOps.getMaxHealth();
+   * console.log(`Max hearts: ${maxHealth / 8}`);
+   */
   async getMaxHealth() {
     try {
       const maxHealth = await this.readWithRetry(MEMORY_ADDRESSES.MAX_HEALTH, 1);
@@ -60,6 +115,16 @@ class ZeldaOperations {
     }
   }
 
+  /**
+   * Add a heart container to Link's maximum health
+   * Maximum 20 hearts (0xA0)
+   *
+   * @returns {Promise<{success: boolean, error?: string, newMax?: number}>} Result object
+   *
+   * @example
+   * const result = await zeldaOps.addHeartContainer();
+   * if (result.success) console.log(`Now has ${result.newMax} hearts`);
+   */
   async addHeartContainer() {
     try {
       console.log('=== Adding Heart Container ===');
@@ -105,6 +170,16 @@ class ZeldaOperations {
     }
   }
 
+  /**
+   * Remove a heart container from Link's maximum health
+   * Minimum 3 hearts (0x18)
+   *
+   * @returns {Promise<{success: boolean, error?: string, newMax?: number}>} Result object
+   *
+   * @example
+   * const result = await zeldaOps.removeHeartContainer();
+   * if (result.success) console.log(`Now has ${result.newMax} hearts`);
+   */
   async removeHeartContainer() {
     try {
       console.log('=== Removing Heart Container ===');
@@ -156,6 +231,15 @@ class ZeldaOperations {
   // For SMW: hoellOps.killPlayer (multi-sprite tester)
   // For Zelda: implement separately if needed
 
+  /**
+   * Warp Link to the Eastern Palace entrance
+   *
+   * @returns {Promise<{success: boolean, message: string}>} Result object
+   * @throws {Error} If warp operation fails
+   *
+   * @example
+   * await zeldaOps.warpToEasternPalace();
+   */
   async warpToEasternPalace() {
     try {
       console.log('Warping to Eastern Palace...');
@@ -201,6 +285,16 @@ class ZeldaOperations {
     }
   }
 
+  /**
+   * Get comprehensive game state information
+   *
+   * @returns {Promise<{gameMode: number, roomId: number, currentHealth: number, maxHealth: number, currentHearts: number, maxHearts: number}>} Game state object
+   * @throws {Error} If state read fails
+   *
+   * @example
+   * const state = await zeldaOps.getGameState();
+   * console.log(`Link has ${state.currentHearts}/${state.maxHearts} hearts in room ${state.roomId}`);
+   */
   async getGameState() {
     try {
       const gameMode = await this.client.readMemory(MEMORY_ADDRESSES.GAME_MODE, 1);
