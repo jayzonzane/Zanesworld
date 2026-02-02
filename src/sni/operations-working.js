@@ -155,18 +155,21 @@ class WorkingSMWOperations {
     try {
       console.log('[killPlayer] Killing Mario with visual death effect...');
 
-      // Make Mario small so he can be killed by one hit
-      await this.setMarioPowerup(POWERUP_TYPES.SMALL);
-      console.log('[killPlayer] Set Mario to small');
+      // Option 1: Make Mario small first (visual shrinking)
+      const currentPowerup = await this.readWithRetry(MEMORY_ADDRESSES.POWERUP_STATUS, 1);
+      if (currentPowerup[0] > 0) {
+        await this.setMarioPowerup(POWERUP_TYPES.SMALL);
+        console.log('[killPlayer] Shrunk Mario to small');
+        // Wait for shrink animation
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
 
-      // Wait a moment for powerup change to register
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Option 2: Trigger pit death for guaranteed kill
+      // Set Y position very high (0x02FF) to make Mario fall off screen
+      await this.writeWithRetry(MEMORY_ADDRESSES.PLAYER_Y_POSITION, Buffer.from([0xFF])); // Low byte
+      await this.writeWithRetry(MEMORY_ADDRESSES.PLAYER_Y_POSITION + 1, Buffer.from([0x02])); // High byte
 
-      // Force pit death as backup (in case spawning fails)
-      await this.writeWithRetry(MEMORY_ADDRESSES.PLAYER_Y_POSITION, Buffer.from([0xFF]));
-      await this.writeWithRetry(MEMORY_ADDRESSES.PLAYER_Y_POSITION + 1, Buffer.from([0x02]));
-
-      console.log('[killPlayer] Death triggered (pit death)');
+      console.log('[killPlayer] Death triggered (shrink + pit death)');
       return { success: true };
     } catch (error) {
       console.error('[killPlayer] Error:', error.message);
