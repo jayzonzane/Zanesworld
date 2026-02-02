@@ -590,153 +590,72 @@ class HoellCCOperations {
   }
 
   /**
-   * Spawns Kaizo blocks when Mario is ACTUALLY jumping (tracks real velocity)
-   * Blocks appear in direction of travel and auto-despawn after 2 seconds
+   * Spawns Kaizo blocks ONCE at the start of each jump
+   * Blocks spawn immediately when jump is detected
    */
   async spawnKaizoBlock() {
     try {
-      let isJumping = false;
-      let lastSpawnTime = 0;
+      let wasJumping = false;
       const allSpawnedBlocks = []; // Track all spawned blocks for cleanup
-      const SPAWN_INTERVAL_MS = 80; // Only spawn every 80ms to prevent crash
-      const MAX_BLOCKS = 60; // Maximum blocks to prevent level crash
+      const MAX_BLOCKS = 100; // Maximum blocks to prevent level crash
 
-      // Monitor for ACTUAL jump - detect upward velocity (not button prediction)
+      // Monitor for jump START - detect transition to upward velocity
       const checkInterval = setInterval(async () => {
         try {
-          // Read Y velocity to detect if Mario is ACTUALLY jumping upward
+          // Read Y velocity to detect if Mario is jumping upward
           const ySpeed = await this.client.readMemory(0x7E007D, 1); // PLAYER_Y_SPEED
           const yVel = ySpeed[0] << 24 >> 24; // Convert to signed
+          const isJumping = yVel < -5; // Jumping if moving upward with decent speed
 
-          // Jump in progress - Mario is moving upward (continuously spawn blocks)
-          if (yVel < 0) {
-            if (!isJumping) {
-              console.log('[spawnKaizoBlock] Jump started - continuous spawning enabled');
-              isJumping = true;
-              lastSpawnTime = 0; // Reset spawn timer
-            }
-
-            // Throttle spawning to prevent too many blocks (crash protection)
-            const now = Date.now();
-            if (now - lastSpawnTime < SPAWN_INTERVAL_MS) {
-              return; // Skip this frame, too soon since last spawn
-            }
+          // JUMP START DETECTED - Spawn blocks ONCE
+          if (isJumping && !wasJumping) {
+            console.log('[spawnKaizoBlock] Jump START detected - spawning blocks NOW');
 
             // Check if we've hit the block limit (safety check)
             if (allSpawnedBlocks.length >= MAX_BLOCKS) {
               console.log(`[spawnKaizoBlock] Block limit reached (${MAX_BLOCKS}) - skipping spawn`);
+              wasJumping = isJumping;
               return;
             }
 
-            // Check camera position - don't spawn near level start (1/4 screen = 64 pixels)
-            const cameraData = await this.client.readMemory(this.ADDR_CAMERA_X, 2);
-            const cameraX = cameraData[0] | (cameraData[1] << 8); // 16-bit value
-            if (cameraX < 64) {
-              console.log(`[spawnKaizoBlock] Too close to level start (camera: ${cameraX}) - skipping spawn`);
-              return;
-            }
-
-            // Check player animation - don't spawn during goal tape/level end
-            const animData = await this.client.readMemory(this.ADDR_PLAYER_ANIMATION, 1);
-            const playerAnim = animData[0];
-            // Animation values 9, 10 = goal tape/orb animations
-            if (playerAnim === 9 || playerAnim === 10) {
-              console.log(`[spawnKaizoBlock] Level ending (anim: ${playerAnim}) - stopping`);
-              clearInterval(checkInterval);
-              this.activeTimers.delete('spawnKaizoBlock');
-              return;
-            }
-
-            lastSpawnTime = now;
-
-            // Read X velocity RIGHT NOW to see direction and speed
+            // Read X velocity to determine direction
             const xSpeed = await this.client.readMemory(0x7E007B, 1); // PLAYER_X_SPEED
             const xVel = xSpeed[0] << 24 >> 24; // Convert to signed
-            const absVel = Math.abs(xVel);
 
-            // Read P-meter for additional running confirmation
-            const pMeterData = await this.client.readMemory(0x7E13E4, 1); // P_METER
-            const pMeter = pMeterData[0];
-
-            // Determine jump type and block pattern using hybrid detection system
+            // Spawn 5 blocks directly in Mario's path
             const blockOffsets = [];
-            let jumpType;
-
-            // RUNNING JUMP - Hybrid detection: high X velocity OR P-meter indicates running
-            if (absVel > 12 || pMeter > 56) {
-              // RUNNING JUMP - 10 blocks spread wide in front
-              jumpType = 'RUNNING';
-              if (xVel > 0) {
-                blockOffsets.push({ x: 16, y: -4 });
-                blockOffsets.push({ x: 32, y: -4 });
-                blockOffsets.push({ x: 48, y: -4 });
-                blockOffsets.push({ x: 64, y: -4 });
-                blockOffsets.push({ x: 80, y: -4 });
-                blockOffsets.push({ x: 96, y: -4 });
-                blockOffsets.push({ x: 112, y: -4 });
-                blockOffsets.push({ x: 128, y: -4 });
-                blockOffsets.push({ x: 144, y: -4 });
-                blockOffsets.push({ x: 160, y: -4 });
-              } else {
-                blockOffsets.push({ x: -16, y: -4 });
-                blockOffsets.push({ x: -32, y: -4 });
-                blockOffsets.push({ x: -48, y: -4 });
-                blockOffsets.push({ x: -64, y: -4 });
-                blockOffsets.push({ x: -80, y: -4 });
-                blockOffsets.push({ x: -96, y: -4 });
-                blockOffsets.push({ x: -112, y: -4 });
-                blockOffsets.push({ x: -128, y: -4 });
-                blockOffsets.push({ x: -144, y: -4 });
-                blockOffsets.push({ x: -160, y: -4 });
-              }
-            } else if (absVel > 5) {
-              // WALKING JUMP - 3 blocks moderately ahead
-              jumpType = 'WALKING';
-              if (xVel > 0) {
-                blockOffsets.push({ x: 16, y: -4 });
-                blockOffsets.push({ x: 32, y: -4 });
-                blockOffsets.push({ x: 48, y: -4 });
-              } else {
-                blockOffsets.push({ x: -16, y: -4 });
-                blockOffsets.push({ x: -32, y: -4 });
-                blockOffsets.push({ x: -48, y: -4 });
-              }
+            if (xVel > 0) {
+              // Moving right
+              blockOffsets.push({ x: 8, y: 0 });
+              blockOffsets.push({ x: 16, y: 0 });
+              blockOffsets.push({ x: 24, y: 0 });
+              blockOffsets.push({ x: 32, y: 0 });
+              blockOffsets.push({ x: 40, y: 0 });
+            } else if (xVel < 0) {
+              // Moving left
+              blockOffsets.push({ x: -8, y: 0 });
+              blockOffsets.push({ x: -16, y: 0 });
+              blockOffsets.push({ x: -24, y: 0 });
+              blockOffsets.push({ x: -32, y: 0 });
+              blockOffsets.push({ x: -40, y: 0 });
             } else {
-              // STANDING JUMP - 2 blocks directly above
-              jumpType = 'STANDING';
-              blockOffsets.push({ x: -8, y: -4 });
-              blockOffsets.push({ x: 8, y: -4 });
+              // Standing still - blocks directly above
+              blockOffsets.push({ x: -8, y: 0 });
+              blockOffsets.push({ x: 0, y: 0 });
+              blockOffsets.push({ x: 8, y: 0 });
             }
 
-            // Spawn all invisible blocks (Map16 0x0021) sequentially
+            // Spawn all invisible blocks (Map16 0x0021)
             for (const offset of blockOffsets) {
               await this.spawner.spawnBlockViaMarioMod(0x0021, offset.x, offset.y);
-              allSpawnedBlocks.push(offset); // Track for cleanup
+              allSpawnedBlocks.push(offset);
             }
 
-            console.log(`[spawnKaizoBlock] ${jumpType} - spawning ${blockOffsets.length} blocks (xVel: ${xVel}, yVel: ${yVel})`);
-
-            // Continue monitoring - DON'T stop until jump ends
-          } else if (isJumping && yVel >= 0) {
-            // Jump ended - Mario reached peak or started falling
-            console.log(`[spawnKaizoBlock] Jump ended - spawned ${allSpawnedBlocks.length} total blocks`);
-
-            // Despawn all blocks after 2 seconds by replacing with air
-            setTimeout(async () => {
-              try {
-                for (const offset of allSpawnedBlocks) {
-                  await this.spawner.spawnBlockViaMarioMod(0x0025, offset.x, offset.y);
-                }
-                console.log('[spawnKaizoBlock] Cleaned up all blocks');
-              } catch (error) {
-                console.error('[spawnKaizoBlock] Despawn error:', error.message);
-              }
-            }, 2000);
-
-            // Stop monitoring after jump completes
-            clearInterval(checkInterval);
-            this.activeTimers.delete('spawnKaizoBlock');
+            console.log(`[spawnKaizoBlock] Spawned ${blockOffsets.length} blocks at jump start (xVel: ${xVel})`);
           }
+
+          // Update state for next frame
+          wasJumping = isJumping;
         } catch (error) {
           console.error('[spawnKaizoBlock] Monitor error:', error.message);
           clearInterval(checkInterval);
