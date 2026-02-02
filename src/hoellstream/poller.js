@@ -137,7 +137,7 @@ class HoellStreamPoller {
       }
 
       // Clean up reader
-      try { reader.cancel(); } catch (e) { /* ignore */ }
+      try { reader.cancel(); } catch (e) { console.error('[Poller] Reader cancel error:', e.message); }
 
       // Wrap in expected format
       const data = { events, count: events.length };

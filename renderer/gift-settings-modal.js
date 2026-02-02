@@ -1,5 +1,31 @@
 // Gift Settings Modal Handler
 
+// ============= EVENT LISTENER CLEANUP SYSTEM =============
+// Store references for cleanup to prevent memory leaks
+const eventListeners = [];
+
+function addManagedEventListener(element, event, handler, options) {
+  if (!element) return;
+  element.addEventListener(event, handler, options);
+  eventListeners.push({ element, event, handler, options });
+}
+
+function cleanupEventListeners() {
+  console.log(`[Gift Settings] Cleaning up ${eventListeners.length} event listeners`);
+  eventListeners.forEach(({ element, event, handler, options }) => {
+    try {
+      element.removeEventListener(event, handler, options);
+    } catch (error) {
+      console.error('[Gift Settings] Failed to remove event listener:', error.message);
+    }
+  });
+  eventListeners.length = 0;
+}
+
+// Add cleanup on window unload
+window.addEventListener('beforeunload', cleanupEventListeners);
+
+// ============= MODAL ELEMENTS =============
 // Get modal elements
 const modal = document.getElementById('gift-settings-modal');
 const settingsBtn = document.getElementById('settings-btn');
@@ -233,7 +259,7 @@ function createUnifiedGiftItem(giftName, coins, archived = false) {
 
   // Add download button event listener
   const downloadBtn = imageGroup.querySelector('.download-image-btn');
-  downloadBtn.addEventListener('click', async (e) => {
+  addManagedEventListener(downloadBtn, 'click', async (e) => {
     e.stopPropagation(); // Prevent row expansion
     const urlInput = imageGroup.querySelector('.gift-image-url-input');
     const url = urlInput.value.trim();
@@ -288,7 +314,7 @@ function createUnifiedGiftItem(giftName, coins, archived = false) {
   details.appendChild(imageGroup);
 
   // Click to expand/collapse
-  mainRow.addEventListener('click', () => {
+  addManagedEventListener(mainRow, 'click', () => {
     const isExpanded = details.style.display !== 'none';
     details.style.display = isExpanded ? 'none' : 'block';
     expandBtn.textContent = isExpanded ? '▶' : '▼';
@@ -306,7 +332,7 @@ function setupGiftSearch() {
   const searchInput = document.getElementById('gift-search');
   if (!searchInput) return;
 
-  searchInput.addEventListener('input', (e) => {
+  addManagedEventListener(searchInput, 'input', (e) => {
     const searchTerm = e.target.value.toLowerCase();
     const items = document.querySelectorAll('.unified-gift-item');
 
@@ -507,7 +533,7 @@ async function removeCustomGift(index) {
 }
 
 // Save gift database
-saveDatabaseBtn.addEventListener('click', async () => {
+addManagedEventListener(saveDatabaseBtn, 'click', async () => {
   try {
     const nameOverrides = {};
     const nameChanges = {}; // Track original->new name mappings
@@ -618,7 +644,7 @@ async function updateMappingsWithNewNames(nameChanges) {
 }
 
 // Reset gift database
-resetDatabaseBtn.addEventListener('click', async () => {
+addManagedEventListener(resetDatabaseBtn, 'click', async () => {
   if (!confirm('Reset all gift names to defaults? This will remove all your custom edits.')) {
     return;
   }
@@ -778,7 +804,7 @@ function convertInputsToSelects() {
 }
 
 // Handle coin value selection
-document.addEventListener('change', (e) => {
+addManagedEventListener(document, 'change', (e) => {
   if (e.target.classList.contains('coin-select')) {
     const coinSelect = e.target;
     const coinValue = coinSelect.value;
@@ -801,7 +827,7 @@ document.addEventListener('change', (e) => {
 
 // Tab switching
 // Event handlers for gift settings actions
-document.addEventListener('click', (e) => {
+addManagedEventListener(document, 'click', (e) => {
   // Handle Add Custom Gift button
   if (e.target.id === 'add-custom-gift') {
     addCustomGift();
@@ -1032,7 +1058,7 @@ async function loadGiftSettings() {
 }
 
 // Handle gift selection change
-document.addEventListener('change', (e) => {
+addManagedEventListener(document, 'change', (e) => {
   if (e.target.classList.contains('gift-select')) {
     const select = e.target;
     const oldValue = select.dataset.previousValue || '';
@@ -1117,7 +1143,7 @@ function removeOtherMapping(giftName, excludeSelect) {
 // Reset all gift mappings
 const resetAllMappingsBtn = document.getElementById('reset-all-gift-mappings');
 if (resetAllMappingsBtn) {
-  resetAllMappingsBtn.addEventListener('click', async () => {
+  addManagedEventListener(resetAllMappingsBtn, 'click', async () => {
     if (!confirm('Are you sure you want to clear ALL gift mappings? This cannot be undone.')) {
       return;
     }
@@ -1175,7 +1201,7 @@ if (resetAllMappingsBtn) {
 }
 
 // Save gift settings
-saveBtn.addEventListener('click', async () => {
+addManagedEventListener(saveBtn, 'click', async () => {
   try {
     const mappings = {};
 
@@ -1265,7 +1291,7 @@ saveBtn.addEventListener('click', async () => {
 // Download all gift images button handler
 const downloadAllImagesBtn = document.getElementById('download-all-images');
 if (downloadAllImagesBtn) {
-  downloadAllImagesBtn.addEventListener('click', async () => {
+  addManagedEventListener(downloadAllImagesBtn, 'click', async () => {
     const progressDiv = document.getElementById('download-progress');
     const statusSpan = document.getElementById('download-status');
     const countSpan = document.getElementById('download-count');
@@ -2417,7 +2443,7 @@ async function loadGiftImageOverrides() {
 
 // Save gift image overrides
 if (saveImagesBtn) {
-  saveImagesBtn.addEventListener('click', async () => {
+  addManagedEventListener(saveImagesBtn, 'click', async () => {
   try {
     const inputs = document.querySelectorAll('.gift-image-url-input');
     const overrides = {};
@@ -2553,7 +2579,7 @@ async function populateGiftImagesList() {
     input.dataset.coins = gift.coins;
 
     // Update preview on input change
-    input.addEventListener('change', () => {
+    addManagedEventListener(input, 'change', () => {
       const newUrl = input.value.trim();
       preview.innerHTML = '';
       preview.classList.remove('no-image');
@@ -2580,7 +2606,7 @@ async function populateGiftImagesList() {
     const clearBtn = document.createElement('button');
     clearBtn.className = 'btn-clear-image';
     clearBtn.textContent = '🗑️ Clear';
-    clearBtn.addEventListener('click', () => {
+    addManagedEventListener(clearBtn, 'click', () => {
       input.value = '';
       input.dispatchEvent(new Event('change'));
     });
@@ -2710,7 +2736,7 @@ async function loadVersionHistory() {
 
     // Add click event listeners to version headers
     container.querySelectorAll('.version-header').forEach(header => {
-      header.addEventListener('click', (e) => {
+      addManagedEventListener(header, 'click', (e) => {
         const versionIndex = header.getAttribute('data-version-index');
         const detailsDiv = document.getElementById(`version-details-${versionIndex}`);
         const arrow = document.getElementById(`arrow-${versionIndex}`);
@@ -2909,7 +2935,7 @@ function setupDatabaseUpdateListeners() {
   // Update button
   const updateBtn = document.getElementById('update-gift-database-btn');
   if (updateBtn) {
-    updateBtn.addEventListener('click', triggerDatabaseUpdate);
+    addManagedEventListener(updateBtn, 'click', triggerDatabaseUpdate);
   }
 
   // Listen for progress updates
@@ -3272,7 +3298,7 @@ function displayMappingWarnings() {
 
   // Add event listeners for remap buttons
   document.querySelectorAll('.btn-remap').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    addManagedEventListener(btn, 'click', (e) => {
       const giftKey = e.target.dataset.gift;
       const action = e.target.dataset.action;
       handleRemapArchivedGift(giftKey, action);
@@ -3468,9 +3494,9 @@ function initializeCollapsibleCategories() {
     category.appendChild(content);
 
     // Add click handler
-    header.addEventListener('click', () => {
+    addManagedEventListener(header, 'click', () => {
       const isExpanded = header.classList.contains('expanded');
-      
+
       if (isExpanded) {
         header.classList.remove('expanded');
         content.classList.remove('expanded');
@@ -3645,7 +3671,7 @@ function tryInitializeCollapsible() {
     setTimeout(() => {
       const collapseAllBtn = document.getElementById('collapse-all-categories');
       if (collapseAllBtn && !collapseAllBtn.hasAttribute('data-listener-attached')) {
-        collapseAllBtn.addEventListener('click', toggleAllCategories);
+        addManagedEventListener(collapseAllBtn, 'click', toggleAllCategories);
         collapseAllBtn.setAttribute('data-listener-attached', 'true');
       }
     }, 50);
@@ -3661,7 +3687,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const giftSettingsTabBtn = document.querySelector('[data-tab="gift-settings-tab"]');
 
   if (giftSettingsTabBtn) {
-    giftSettingsTabBtn.addEventListener('click', () => {
+    addManagedEventListener(giftSettingsTabBtn, 'click', () => {
       // Try immediately
       if (!tryInitializeCollapsible()) {
         // If not ready, retry a few times
@@ -3680,7 +3706,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Also initialize when subtab button is clicked (in case user switches between subtabs)
   const mappingsBtn = document.querySelector('[data-subtab="gift-mappings-subtab"]');
   if (mappingsBtn) {
-    mappingsBtn.addEventListener('click', () => {
+    addManagedEventListener(mappingsBtn, 'click', () => {
       setTimeout(() => tryInitializeCollapsible(), 100);
     });
   }

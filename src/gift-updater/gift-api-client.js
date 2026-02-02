@@ -58,46 +58,110 @@ class GiftAPIClient {
    */
   _makeRequest(url) {
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error(`Request timeout after ${this.timeout}ms`));
+      let timeoutHandle = null;
+      let isResolved = false;
+
+      const cleanup = () => {
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+          timeoutHandle = null;
+        }
+      };
+
+      const safeReject = (error) => {
+        if (isResolved) return;
+        isResolved = true;
+        cleanup();
+        reject(error);
+      };
+
+      const safeResolve = (data) => {
+        if (isResolved) return;
+        isResolved = true;
+        cleanup();
+        resolve(data);
+      };
+
+      timeoutHandle = setTimeout(() => {
+        safeReject(new Error(`Request timeout after ${this.timeout}ms`));
       }, this.timeout);
 
-      https.get(url, (response) => {
-        clearTimeout(timeout);
+      try {
+        const request = https.get(url, (response) => {
+          if (isResolved) return;
+          clearTimeout(timeoutHandle);
 
-        if (response.statusCode !== 200) {
-          reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`));
-          return;
-        }
+          if (response.statusCode !== 200) {
+            safeReject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`));
+            response.resume(); // Drain response to free up memory
+            return;
+          }
 
-        let data = '';
-        response.on('data', (chunk) => {
-          data += chunk;
-        });
+          let data = '';
 
-        response.on('end', () => {
-          try {
-            // Check if response is HTML or JSON
-            const trimmedData = data.trim();
-            if (trimmedData.startsWith('<')) {
-              // HTML response - parse it
-              console.log('📄 Received HTML response, parsing gifts...');
-              const parsedGifts = this._parseHTMLGifts(data);
-              resolve(parsedGifts);
-            } else {
-              // JSON response
-              const parsed = JSON.parse(data);
-              resolve(parsed);
+          response.on('data', (chunk) => {
+            if (isResolved) return;
+            try {
+              data += chunk;
+            } catch (error) {
+              safeReject(new Error(`Data chunk error: ${error.message}`));
             }
-          } catch (error) {
-            reject(new Error(`Failed to parse response: ${error.message}`));
+          });
+
+          response.on('end', () => {
+            if (isResolved) return;
+            try {
+              // Check if response is HTML or JSON
+              const trimmedData = data.trim();
+              if (!trimmedData) {
+                safeReject(new Error('Empty response received'));
+                return;
+              }
+
+              if (trimmedData.startsWith('<')) {
+                // HTML response - parse it
+                console.log('📄 Received HTML response, parsing gifts...');
+                const parsedGifts = this._parseHTMLGifts(data);
+                safeResolve(parsedGifts);
+              } else {
+                // JSON response
+                const parsed = JSON.parse(data);
+                safeResolve(parsed);
+              }
+            } catch (error) {
+              safeReject(new Error(`Failed to parse response: ${error.message}`));
+            }
+          });
+
+          response.on('error', (error) => {
+            safeReject(new Error(`Response stream error: ${error.message}`));
+          });
+
+        }).on('error', (error) => {
+          // Handle DNS failures, connection refused, etc.
+          if (error.code === 'ENOTFOUND') {
+            safeReject(new Error(`DNS lookup failed: Cannot resolve ${error.hostname || 'hostname'}`));
+          } else if (error.code === 'ECONNREFUSED') {
+            safeReject(new Error('Connection refused by server'));
+          } else if (error.code === 'ETIMEDOUT') {
+            safeReject(new Error('Connection timed out'));
+          } else if (error.code === 'ECONNRESET') {
+            safeReject(new Error('Connection reset by server'));
+          } else {
+            safeReject(new Error(`Network error: ${error.message}`));
           }
         });
 
-      }).on('error', (error) => {
-        clearTimeout(timeout);
-        reject(error);
-      });
+        // Handle request errors (before connection is established)
+        request.on('timeout', () => {
+          request.destroy();
+          safeReject(new Error('Request timeout'));
+        });
+
+      } catch (error) {
+        // Catch synchronous errors (e.g., invalid URL)
+        safeReject(new Error(`Request setup error: ${error.message}`));
+      }
     });
   }
 
