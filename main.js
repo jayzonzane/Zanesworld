@@ -2,15 +2,31 @@ const { app, BrowserWindow, ipcMain, protocol, net } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs').promises;
+const crypto = require('crypto');
+
+// Utility: Safe JSON parsing with detailed error messages
+function safeJSONParse(jsonString, fallback = null, context = 'unknown') {
+  try {
+    return JSON.parse(jsonString);
+  } catch (error) {
+    console.error(`❌ JSON parse error in ${context}:`, error.message);
+    console.error(`   First 100 chars: ${jsonString.substring(0, 100)}`);
+    return fallback;
+  }
+}
+
+// Utility: Generate cryptographically secure random ID
+function generateSecureId() {
+  return crypto.randomBytes(16).toString('hex');
+}
 
 // We'll initialize these after creating the window
 let mainWindow;
 let actionConsoleWindow = null;
 let sniClient;
 let luaClient;  // Lua connector client for emulator mode
-let gameOps;
-let expandedOps;
-let hoellOps;
+let zeldaOps;
+let smwOps;
 let luaGameOps;      // Lua game operations wrapper
 let luaExpandedOps;  // Lua expanded operations wrapper
 let luaHoellOps;     // Lua HoellCC operations wrapper
@@ -40,8 +56,8 @@ async function autoConnectSNI() {
       // (Auto-start removed - user has manual control)
 
       // Start indoors monitoring for stored chicken attacks
-      if (expandedOps) {
-        expandedOps.startIndoorsMonitoring();
+      if (smwOps) {
+        smwOps.startIndoorsMonitoring();
         console.log('🐔 Indoors monitoring started for stored chicken attacks');
       }
 
@@ -125,9 +141,8 @@ function createWindow() {
 
   // Initialize SNI client after window is created
   const SNIClient = require('./src/sni/client');
-  const GameOperations = require('./src/sni/operations');
-  const WorkingSMWOperations = require('./src/sni/operations-working');
-  const HoellCCOperations = require('./src/sni/operations-hoellcc');
+  const ZeldaOperations = require('./src/sni/operations-zelda');
+  const SMWOperations = require('./src/sni/operations-smw');
   const LuaConnectorClient = require('./src/emulator/lua-connector-client');
   const { LuaGameOperations, LuaExpandedOperations, LuaHoellOperations } = require('./src/emulator/lua-operations');
   const HoellStreamPoller = require('./src/hoellstream/poller');
@@ -150,9 +165,8 @@ function createWindow() {
 
   // Initialize SNI client and operations
   sniClient = new SNIClient();
-  gameOps = new GameOperations(sniClient);
-  expandedOps = new WorkingSMWOperations(sniClient);
-  hoellOps = new HoellCCOperations(sniClient);
+  zeldaOps = new ZeldaOperations(sniClient);
+  smwOps = new SMWOperations(sniClient);
   console.log('🎮 SNI operations initialized');
 
   // Initialize Lua connector client (not connected by default)
@@ -182,7 +196,7 @@ function createWindow() {
   });
 
   // Initialize ItemRestorationManager
-  restorationManager = new ItemRestorationManager(expandedOps);
+  restorationManager = new ItemRestorationManager(smwOps);
   console.log('⏱️ ItemRestorationManager initialized');
 
   // Load TIKTOK_GIFTS database for the poller
@@ -196,8 +210,8 @@ function createWindow() {
   }
 
   // Initialize HoellStream poller (but don't start polling yet)
-  // Pass both expandedOps and gameOps (basic operations like KO player)
-  hoellPoller = new HoellStreamPoller(expandedOps, gameOps, {
+  // Pass both smwOps and zeldaOps (basic operations like KO player)
+  hoellPoller = new HoellStreamPoller(smwOps, zeldaOps, {
     pollIntervalMs: 2000,
     debugMode: true,
     giftDatabase: giftDatabase
@@ -208,7 +222,7 @@ function createWindow() {
   hoellPoller.setRestorationManager(restorationManager);
 
   // Initialize EventProcessor
-  eventProcessor = new EventProcessor(expandedOps, gameOps, {
+  eventProcessor = new EventProcessor(smwOps, zeldaOps, {
     debugMode: true,
     giftDatabase: giftDatabase
   });
@@ -231,7 +245,7 @@ function createWindow() {
   console.log('🎁 TikFinity WebSocket client initialized');
 
   // Initialize Lua Scripting (SNESApi + ScriptEngine)
-  snesAPI = new SNESApi(sniClient, gameOps, expandedOps, hoellOps);
+  snesAPI = new SNESApi(sniClient, zeldaOps, smwOps, smwOps);
   console.log('📜 SNESApi initialized');
 
   scriptEngine = new ScriptEngine({
@@ -302,8 +316,8 @@ ipcMain.handle('select-device', async (event, deviceInfo) => {
     // (Auto-start removed - user has manual control)
 
     // Start indoors monitoring for stored chicken attacks
-    if (expandedOps) {
-      expandedOps.startIndoorsMonitoring();
+    if (smwOps) {
+      smwOps.startIndoorsMonitoring();
       console.log('🐔 Indoors monitoring started for stored chicken attacks');
     }
 
@@ -315,26 +329,20 @@ ipcMain.handle('select-device', async (event, deviceInfo) => {
 
 // restart-sni IPC handler removed - SNI must be run externally
 
-// Generic SMW operation handler with HoellCC fallback
+// Generic SMW operation handler
 ipcMain.handle('execute-smw-operation', async (event, operationName, ...args) => {
   try {
     if (!sniClient.deviceURI) {
       throw new Error('No device selected');
     }
 
-    // Try ZanesWorld operations first (expandedOps)
-    if (typeof expandedOps[operationName] === 'function') {
-      const result = await expandedOps[operationName](...args);
+    // Check if smwOps has the requested method
+    if (typeof smwOps[operationName] === 'function') {
+      const result = await smwOps[operationName](...args);
       return { success: true, result };
     }
 
-    // Fallback to HoellCC operations
-    if (hoellOps && typeof hoellOps[operationName] === 'function') {
-      const result = await hoellOps[operationName](...args);
-      return { success: true, result };
-    }
-
-    // Operation not found in either module
+    // Operation not found
     throw new Error(`Unknown operation: ${operationName}`);
   } catch (error) {
     console.error(`Error executing ${operationName}:`, error);
@@ -347,7 +355,7 @@ ipcMain.handle('add-heart', async () => {
     if (!sniClient.deviceURI) {
       throw new Error('No device selected');
     }
-    return await gameOps.addHeartContainer();
+    return await zeldaOps.addHeartContainer();
   } catch (error) {
     console.error('Add heart error:', error);
     return { success: false, error: error.message };
@@ -359,7 +367,7 @@ ipcMain.handle('remove-heart', async () => {
     if (!sniClient.deviceURI) {
       throw new Error('No device selected');
     }
-    return await gameOps.removeHeartContainer();
+    return await zeldaOps.removeHeartContainer();
   } catch (error) {
     console.error('Remove heart error:', error);
     return { success: false, error: error.message };
@@ -371,7 +379,7 @@ ipcMain.handle('kill-player', async () => {
     if (!sniClient.deviceURI) {
       throw new Error('No device selected');
     }
-    return await gameOps.killPlayer();
+    return await zeldaOps.killPlayer();
   } catch (error) {
     console.error('KO player error:', error);
     return { success: false, error: error.message };
@@ -383,7 +391,7 @@ ipcMain.handle('warp-eastern', async () => {
     if (!sniClient.deviceURI) {
       throw new Error('No device selected');
     }
-    return await gameOps.warpToEasternPalace();
+    return await zeldaOps.warpToEasternPalace();
   } catch (error) {
     console.error('Warp error:', error);
     return { success: false, error: error.message };
@@ -395,7 +403,7 @@ ipcMain.handle('fake-mirror', async () => {
     if (!sniClient.deviceURI) {
       throw new Error('No device selected');
     }
-    return await expandedOps.fakeMirror();
+    return await smwOps.fakeMirror();
   } catch (error) {
     console.error('Fake Mirror error:', error);
     return { success: false, error: error.message };
@@ -407,7 +415,7 @@ ipcMain.handle('chaos-dungeon-warp', async () => {
     if (!sniClient.deviceURI) {
       throw new Error('No device selected');
     }
-    return await expandedOps.chaosDungeonWarp();
+    return await smwOps.chaosDungeonWarp();
   } catch (error) {
     console.error('Chaos Dungeon Warp error:', error);
     return { success: false, error: error.message };
@@ -419,7 +427,7 @@ ipcMain.handle('toggle-world', async () => {
     if (!sniClient.deviceURI) {
       throw new Error('No device selected');
     }
-    return await expandedOps.toggleWorld();
+    return await smwOps.toggleWorld();
   } catch (error) {
     console.error('Toggle World error:', error);
     return { success: false, error: error.message };
@@ -445,7 +453,7 @@ ipcMain.handle('test-memory', async () => {
 ipcMain.handle('set-rupees', async (event, amount) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.setRupees(amount);
+    return await smwOps.setRupees(amount);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -455,7 +463,7 @@ ipcMain.handle('set-rupees', async (event, amount) => {
 ipcMain.handle('set-bombs', async (event, amount) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.setBombs(amount);
+    return await smwOps.setBombs(amount);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -464,7 +472,7 @@ ipcMain.handle('set-bombs', async (event, amount) => {
 ipcMain.handle('set-arrows', async (event, amount) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.setArrows(amount);
+    return await smwOps.setArrows(amount);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -474,7 +482,7 @@ ipcMain.handle('set-arrows', async (event, amount) => {
 ipcMain.handle('set-sword', async (event, level) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.setSword(level);
+    return await smwOps.setSword(level);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -483,7 +491,7 @@ ipcMain.handle('set-sword', async (event, level) => {
 ipcMain.handle('set-shield', async (event, level) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.setShield(level);
+    return await smwOps.setShield(level);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -493,7 +501,7 @@ ipcMain.handle('set-shield', async (event, level) => {
 ipcMain.handle('toggle-boots', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleBoots();
+    return await smwOps.toggleBoots();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -502,7 +510,7 @@ ipcMain.handle('toggle-boots', async () => {
 ipcMain.handle('toggle-flippers', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleFlippers();
+    return await smwOps.toggleFlippers();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -511,7 +519,7 @@ ipcMain.handle('toggle-flippers', async () => {
 ipcMain.handle('toggle-invincibility', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleInvincibility();
+    return await smwOps.toggleInvincibility();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -521,7 +529,7 @@ ipcMain.handle('toggle-invincibility', async () => {
 ipcMain.handle('toggle-freeze-player', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleFreezePlayer();
+    return await smwOps.toggleFreezePlayer();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -531,7 +539,7 @@ ipcMain.handle('toggle-freeze-player', async () => {
 ipcMain.handle('give-ice-physics', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.giveIcePhysics();
+    return await smwOps.giveIcePhysics();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -541,7 +549,7 @@ ipcMain.handle('give-ice-physics', async () => {
 ipcMain.handle('spawn-enemy', async (event, enemyType) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.spawnEnemyNearLink(enemyType);
+    return await smwOps.spawnEnemyNearLink(enemyType);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -550,7 +558,7 @@ ipcMain.handle('spawn-enemy', async (event, enemyType) => {
 ipcMain.handle('spawn-random-enemy', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.spawnRandomEnemy();
+    return await smwOps.spawnRandomEnemy();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -559,7 +567,7 @@ ipcMain.handle('spawn-random-enemy', async () => {
 ipcMain.handle('despawn-floor-blocks', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.despawnFloorBlocks();
+    return await smwOps.despawnFloorBlocks();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -569,7 +577,7 @@ ipcMain.handle('despawn-floor-blocks', async () => {
 ipcMain.handle('moon-jump', async (event, durationSeconds = 30) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.moonJump(durationSeconds);
+    return await smwOps.moonJump(durationSeconds);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -578,7 +586,7 @@ ipcMain.handle('moon-jump', async (event, durationSeconds = 30) => {
 ipcMain.handle('tiny-jump', async (event, durationSeconds = 30) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.tinyJump(durationSeconds);
+    return await smwOps.tinyJump(durationSeconds);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -587,7 +595,7 @@ ipcMain.handle('tiny-jump', async (event, durationSeconds = 30) => {
 ipcMain.handle('low-gravity', async (event, durationSeconds = 30) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.lowGravity(durationSeconds);
+    return await smwOps.lowGravity(durationSeconds);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -596,7 +604,7 @@ ipcMain.handle('low-gravity', async (event, durationSeconds = 30) => {
 ipcMain.handle('high-gravity', async (event, durationSeconds = 30) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.highGravity(durationSeconds);
+    return await smwOps.highGravity(durationSeconds);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -606,7 +614,7 @@ ipcMain.handle('high-gravity', async (event, durationSeconds = 30) => {
 ipcMain.handle('spawn-bee-swarm', async (event, count) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.spawnBeeSwarm(count);
+    return await smwOps.spawnBeeSwarm(count);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -615,7 +623,7 @@ ipcMain.handle('spawn-bee-swarm', async (event, count) => {
 ipcMain.handle('stop-bee-swarm', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.stopBeeSwarm();
+    return await smwOps.stopBeeSwarm();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -625,7 +633,7 @@ ipcMain.handle('stop-bee-swarm', async () => {
 ipcMain.handle('trigger-chicken-attack', async (event, durationSeconds) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.triggerChickenAttack(durationSeconds);
+    return await smwOps.triggerChickenAttack(durationSeconds);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -635,7 +643,7 @@ ipcMain.handle('trigger-chicken-attack', async (event, durationSeconds) => {
 ipcMain.handle('trigger-enemy-waves', async (event, durationSeconds) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.triggerEnemyWaves(durationSeconds);
+    return await smwOps.triggerEnemyWaves(durationSeconds);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -644,7 +652,7 @@ ipcMain.handle('trigger-enemy-waves', async (event, durationSeconds) => {
 ipcMain.handle('trigger-bee-swarm-waves', async (event, durationSeconds) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.triggerBeeSwarmWaves(durationSeconds);
+    return await smwOps.triggerBeeSwarmWaves(durationSeconds);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -654,7 +662,7 @@ ipcMain.handle('trigger-bee-swarm-waves', async (event, durationSeconds) => {
 ipcMain.handle('make-enemies-invisible', async (event, durationSeconds) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.makeEnemiesInvisible(durationSeconds);
+    return await smwOps.makeEnemiesInvisible(durationSeconds);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -668,8 +676,8 @@ ipcMain.handle('enable-infinite-magic', async (event, durationSeconds) => {
       console.log('[Main] No device selected!');
       throw new Error('No device selected');
     }
-    console.log('[Main] Calling expandedOps.enableInfiniteMagic...');
-    const result = await expandedOps.enableInfiniteMagic(durationSeconds);
+    console.log('[Main] Calling smwOps.enableInfiniteMagic...');
+    const result = await smwOps.enableInfiniteMagic(durationSeconds);
     console.log('[Main] enableInfiniteMagic result:', result);
     return result;
   } catch (error) {
@@ -682,7 +690,7 @@ ipcMain.handle('enable-infinite-magic', async (event, durationSeconds) => {
 ipcMain.handle('delete-all-saves', async (event) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.deleteAllSaves();
+    return await smwOps.deleteAllSaves();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -695,7 +703,7 @@ ipcMain.handle('check-mariomod-patch', async () => {
       return { success: false, error: 'No device selected', installed: false };
     }
 
-    const isInstalled = await hoellOps.spawner.checkMarioModPresent();
+    const isInstalled = await smwOps.spawner.checkMarioModPresent();
     return {
       success: true,
       installed: isInstalled,
@@ -712,7 +720,7 @@ ipcMain.handle('check-mariomod-patch', async () => {
 ipcMain.handle('add-bottle', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.addBottle();
+    return await smwOps.addBottle();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -721,7 +729,7 @@ ipcMain.handle('add-bottle', async () => {
 ipcMain.handle('remove-bottle', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.removeBottle();
+    return await smwOps.removeBottle();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -730,7 +738,7 @@ ipcMain.handle('remove-bottle', async () => {
 ipcMain.handle('fill-bottles-potion', async (event, potionType) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.fillAllBottlesWithPotion(potionType);
+    return await smwOps.fillAllBottlesWithPotion(potionType);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -740,7 +748,7 @@ ipcMain.handle('fill-bottles-potion', async (event, potionType) => {
 ipcMain.handle('give-starter-pack', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.giveStarterPack();
+    return await smwOps.giveStarterPack();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -749,7 +757,7 @@ ipcMain.handle('give-starter-pack', async () => {
 ipcMain.handle('give-endgame-pack', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.giveEndgamePack();
+    return await smwOps.giveEndgamePack();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -759,7 +767,7 @@ ipcMain.handle('give-endgame-pack', async () => {
 ipcMain.handle('get-inventory', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    const inventory = await expandedOps.getFullInventory();
+    const inventory = await smwOps.getFullInventory();
     return { success: true, inventory };
   } catch (error) {
     return { success: false, error: error.message };
@@ -770,7 +778,7 @@ ipcMain.handle('get-inventory', async () => {
 ipcMain.handle('set-armor', async (event, level) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.setArmor(level);
+    return await smwOps.setArmor(level);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -779,7 +787,7 @@ ipcMain.handle('set-armor', async (event, level) => {
 ipcMain.handle('set-gloves', async (event, level) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.setGloves(level);
+    return await smwOps.setGloves(level);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -789,7 +797,7 @@ ipcMain.handle('set-gloves', async (event, level) => {
 ipcMain.handle('toggle-moon-pearl', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleMoonPearl();
+    return await smwOps.toggleMoonPearl();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -798,7 +806,7 @@ ipcMain.handle('toggle-moon-pearl', async () => {
 ipcMain.handle('toggle-hookshot', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleHookshot();
+    return await smwOps.toggleHookshot();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -807,7 +815,7 @@ ipcMain.handle('toggle-hookshot', async () => {
 ipcMain.handle('toggle-lamp', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleLamp();
+    return await smwOps.toggleLamp();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -816,7 +824,7 @@ ipcMain.handle('toggle-lamp', async () => {
 ipcMain.handle('toggle-hammer', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleHammer();
+    return await smwOps.toggleHammer();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -825,7 +833,7 @@ ipcMain.handle('toggle-hammer', async () => {
 ipcMain.handle('toggle-book', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleBook();
+    return await smwOps.toggleBook();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -834,7 +842,7 @@ ipcMain.handle('toggle-book', async () => {
 ipcMain.handle('toggle-bug-net', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleBugNet();
+    return await smwOps.toggleBugNet();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -843,7 +851,7 @@ ipcMain.handle('toggle-bug-net', async () => {
 ipcMain.handle('toggle-somaria', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleSomaria();
+    return await smwOps.toggleSomaria();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -852,7 +860,7 @@ ipcMain.handle('toggle-somaria', async () => {
 ipcMain.handle('toggle-byrna', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleByrna();
+    return await smwOps.toggleByrna();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -861,7 +869,7 @@ ipcMain.handle('toggle-byrna', async () => {
 ipcMain.handle('toggle-mirror', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleMirror();
+    return await smwOps.toggleMirror();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -870,7 +878,7 @@ ipcMain.handle('toggle-mirror', async () => {
 ipcMain.handle('toggle-boomerang', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleBoomerang();
+    return await smwOps.toggleBoomerang();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -880,7 +888,7 @@ ipcMain.handle('toggle-boomerang', async () => {
 ipcMain.handle('toggle-fire-rod', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleFireRod();
+    return await smwOps.toggleFireRod();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -889,7 +897,7 @@ ipcMain.handle('toggle-fire-rod', async () => {
 ipcMain.handle('give-fire-rod', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.giveFireRod();
+    return await smwOps.giveFireRod();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -898,7 +906,7 @@ ipcMain.handle('give-fire-rod', async () => {
 ipcMain.handle('toggle-ice-rod', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleIceRod();
+    return await smwOps.toggleIceRod();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -907,7 +915,7 @@ ipcMain.handle('toggle-ice-rod', async () => {
 ipcMain.handle('give-ice-rod', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.giveIceRod();
+    return await smwOps.giveIceRod();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -916,7 +924,7 @@ ipcMain.handle('give-ice-rod', async () => {
 ipcMain.handle('give-capes', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.giveCapes();
+    return await smwOps.giveCapes();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -926,7 +934,7 @@ ipcMain.handle('give-capes', async () => {
 ipcMain.handle('give-flute', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.giveFlute();
+    return await smwOps.giveFlute();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -935,7 +943,7 @@ ipcMain.handle('give-flute', async () => {
 ipcMain.handle('remove-flute', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.removeFlute();
+    return await smwOps.removeFlute();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -944,7 +952,7 @@ ipcMain.handle('remove-flute', async () => {
 ipcMain.handle('deactivate-flute', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.deactivateFlute();
+    return await smwOps.deactivateFlute();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -953,7 +961,7 @@ ipcMain.handle('deactivate-flute', async () => {
 ipcMain.handle('toggle-medallion', async (event, medallionName) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleMedallion(medallionName);
+    return await smwOps.toggleMedallion(medallionName);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -962,7 +970,7 @@ ipcMain.handle('toggle-medallion', async (event, medallionName) => {
 ipcMain.handle('toggle-all-medallions', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleAllMedallions();
+    return await smwOps.toggleAllMedallions();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -971,7 +979,7 @@ ipcMain.handle('toggle-all-medallions', async () => {
 ipcMain.handle('give-all-medallions', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.giveAllMedallions();
+    return await smwOps.giveAllMedallions();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -981,7 +989,7 @@ ipcMain.handle('give-all-medallions', async () => {
 ipcMain.handle('enable-magic', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.enableMagic();
+    return await smwOps.enableMagic();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -990,7 +998,7 @@ ipcMain.handle('enable-magic', async () => {
 ipcMain.handle('remove-magic', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.removeMagic();
+    return await smwOps.removeMagic();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -999,7 +1007,7 @@ ipcMain.handle('remove-magic', async () => {
 ipcMain.handle('set-magic-upgrade', async (event, level) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.setMagicUpgrade(level);
+    return await smwOps.setMagicUpgrade(level);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1009,7 +1017,7 @@ ipcMain.handle('set-magic-upgrade', async (event, level) => {
 ipcMain.handle('add-heart-piece', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.addHeartPiece();
+    return await smwOps.addHeartPiece();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1018,7 +1026,7 @@ ipcMain.handle('add-heart-piece', async () => {
 ipcMain.handle('set-hearts', async (event, count) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.setHearts(count);
+    return await smwOps.setHearts(count);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1028,7 +1036,7 @@ ipcMain.handle('set-hearts', async (event, count) => {
 ipcMain.handle('enable-ice-world', async (event, durationSeconds) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.enableIceWorld(durationSeconds);
+    return await smwOps.enableIceWorld(durationSeconds);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1037,7 +1045,7 @@ ipcMain.handle('enable-ice-world', async (event, durationSeconds) => {
 ipcMain.handle('spawn-boss-rush', async (event, durationSeconds) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.spawnBossRush(durationSeconds);
+    return await smwOps.spawnBossRush(durationSeconds);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1046,7 +1054,7 @@ ipcMain.handle('spawn-boss-rush', async (event, durationSeconds) => {
 ipcMain.handle('enable-item-lock', async (event, durationSeconds) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.enableItemLock(durationSeconds);
+    return await smwOps.enableItemLock(durationSeconds);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1055,7 +1063,7 @@ ipcMain.handle('enable-item-lock', async (event, durationSeconds) => {
 ipcMain.handle('enable-glass-cannon', async (event, durationSeconds) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.enableGlassCannon(durationSeconds);
+    return await smwOps.enableGlassCannon(durationSeconds);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1064,7 +1072,7 @@ ipcMain.handle('enable-glass-cannon', async (event, durationSeconds) => {
 ipcMain.handle('blessing-and-curse', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.blessingAndCurse();
+    return await smwOps.blessingAndCurse();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1074,7 +1082,7 @@ ipcMain.handle('blessing-and-curse', async () => {
 ipcMain.handle('toggle-pendant', async (event, pendantName) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.togglePendant(pendantName);
+    return await smwOps.togglePendant(pendantName);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1083,7 +1091,7 @@ ipcMain.handle('toggle-pendant', async (event, pendantName) => {
 ipcMain.handle('toggle-all-pendants', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleAllPendants();
+    return await smwOps.toggleAllPendants();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1092,7 +1100,7 @@ ipcMain.handle('toggle-all-pendants', async () => {
 ipcMain.handle('give-all-pendants', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.giveAllPendants();
+    return await smwOps.giveAllPendants();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1101,7 +1109,7 @@ ipcMain.handle('give-all-pendants', async () => {
 ipcMain.handle('toggle-crystal', async (event, crystalNum) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleCrystal(crystalNum);
+    return await smwOps.toggleCrystal(crystalNum);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1110,7 +1118,7 @@ ipcMain.handle('toggle-crystal', async (event, crystalNum) => {
 ipcMain.handle('toggle-all-crystals', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleAllCrystals();
+    return await smwOps.toggleAllCrystals();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1119,7 +1127,7 @@ ipcMain.handle('toggle-all-crystals', async () => {
 ipcMain.handle('give-all-crystals', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.giveAllCrystals();
+    return await smwOps.giveAllCrystals();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1129,7 +1137,7 @@ ipcMain.handle('give-all-crystals', async () => {
 ipcMain.handle('add-small-key', async (event, dungeon) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.addSmallKey(dungeon);
+    return await smwOps.addSmallKey(dungeon);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1138,7 +1146,7 @@ ipcMain.handle('add-small-key', async (event, dungeon) => {
 ipcMain.handle('remove-small-key', async (event, dungeon) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.removeSmallKey(dungeon);
+    return await smwOps.removeSmallKey(dungeon);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1147,7 +1155,7 @@ ipcMain.handle('remove-small-key', async (event, dungeon) => {
 ipcMain.handle('give-small-keys', async (event, dungeon, count) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.giveSmallKeys(dungeon, count);
+    return await smwOps.giveSmallKeys(dungeon, count);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1156,7 +1164,7 @@ ipcMain.handle('give-small-keys', async (event, dungeon, count) => {
 ipcMain.handle('toggle-big-key', async (event, dungeon) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.toggleBigKey(dungeon);
+    return await smwOps.toggleBigKey(dungeon);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1165,7 +1173,7 @@ ipcMain.handle('toggle-big-key', async (event, dungeon) => {
 ipcMain.handle('give-big-key', async (event, dungeon) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.giveBigKey(dungeon);
+    return await smwOps.giveBigKey(dungeon);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1174,7 +1182,7 @@ ipcMain.handle('give-big-key', async (event, dungeon) => {
 ipcMain.handle('add-rupees', async (event, amount) => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.addRupees(amount);
+    return await smwOps.addRupees(amount);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1183,7 +1191,7 @@ ipcMain.handle('add-rupees', async (event, amount) => {
 ipcMain.handle('add-rupee', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.addRupee();
+    return await smwOps.addRupee();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1192,7 +1200,7 @@ ipcMain.handle('add-rupee', async () => {
 ipcMain.handle('remove-rupee', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.removeRupee();
+    return await smwOps.removeRupee();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1201,7 +1209,7 @@ ipcMain.handle('remove-rupee', async () => {
 ipcMain.handle('add-bomb', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.addBomb();
+    return await smwOps.addBomb();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1210,7 +1218,7 @@ ipcMain.handle('add-bomb', async () => {
 ipcMain.handle('remove-bomb', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.removeBomb();
+    return await smwOps.removeBomb();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1219,7 +1227,7 @@ ipcMain.handle('remove-bomb', async () => {
 ipcMain.handle('add-arrow', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.addArrow();
+    return await smwOps.addArrow();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1228,7 +1236,7 @@ ipcMain.handle('add-arrow', async () => {
 ipcMain.handle('remove-arrow', async () => {
   try {
     if (!sniClient.deviceURI) throw new Error('No device selected');
-    return await expandedOps.removeArrow();
+    return await smwOps.removeArrow();
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1641,18 +1649,22 @@ function validateImageUrl(url) {
       return { valid: false, error: 'Only HTTPS URLs are allowed' };
     }
 
-    // Whitelist allowed domains
+    // Whitelist allowed domains (exact match or proper subdomain)
     const allowedDomains = [
       'p16-webcast.tiktokcdn.com',
       'p19-webcast.tiktokcdn.com',
       'p77-webcast.tiktokcdn.com',
-      'streamtoearn.io',
-      'tiktokcdn.com'
+      'streamtoearn.io'
     ];
 
-    const isAllowed = allowedDomains.some(domain => {
-      return parsedUrl.hostname === domain || parsedUrl.hostname.endsWith('.' + domain);
-    });
+    const allowedBaseDomains = [
+      'tiktokcdn.com'  // Allow any subdomain of tiktokcdn.com
+    ];
+
+    const isAllowed = allowedDomains.includes(parsedUrl.hostname) ||
+      allowedBaseDomains.some(domain => {
+        return parsedUrl.hostname === domain || parsedUrl.hostname.endsWith('.' + domain);
+      });
 
     if (!isAllowed) {
       return {
@@ -2359,7 +2371,7 @@ ipcMain.handle('set-connection-mode', async (event, mode) => {
       console.log('✅ Switched to Lua connector operations');
     } else {
       // Switch back to SNI operations
-      snesAPI = new SNESApi(sniClient, gameOps, expandedOps, hoellOps);
+      snesAPI = new SNESApi(sniClient, zeldaOps, smwOps, smwOps);
 
       // Update ScriptEngine with new API
       if (scriptEngine) {
@@ -2368,7 +2380,7 @@ ipcMain.handle('set-connection-mode', async (event, mode) => {
 
       // Update EventProcessor with SNI operations
       if (eventProcessor) {
-        eventProcessor.updateOperations(expandedOps, gameOps);
+        eventProcessor.updateOperations(smwOps, zeldaOps);
       }
 
       console.log('✅ Switched to SNI operations');
@@ -2501,8 +2513,8 @@ ipcMain.handle('execute-gift-action', async (event, actionData) => {
     }
 
     // Use current connection mode operations
-    const ops = connectionMode === 'lua' ? luaExpandedOps : expandedOps;
-    const basicOps = connectionMode === 'lua' ? luaGameOps : gameOps;
+    const ops = connectionMode === 'lua' ? luaExpandedOps : smwOps;
+    const basicOps = connectionMode === 'lua' ? luaGameOps : zeldaOps;
 
     // Check which operations object has the action
     let targetOps = null;
@@ -2510,8 +2522,6 @@ ipcMain.handle('execute-gift-action', async (event, actionData) => {
       targetOps = ops;
     } else if (typeof basicOps[action] === 'function') {
       targetOps = basicOps;
-    } else if (typeof hoellOps[action] === 'function') {
-      targetOps = hoellOps;
     } else if (typeof luaHoellOps[action] === 'function') {
       targetOps = luaHoellOps;
     } else {
@@ -2663,32 +2673,29 @@ app.whenReady().then(async () => {
       // For gift-image://filename.webp, the filename is in url.host, not url.pathname
       let filename = url.host || url.pathname.substring(1);
 
-      // SECURITY: Sanitize filename to prevent path traversal
-      // Remove path traversal sequences and path separators
-      filename = filename.replace(/\.\./g, '').replace(/[\/\\]/g, '');
+      // SECURITY: Sanitize filename - remove path separators only (allow dots in filenames)
+      filename = filename.replace(/[\/\\]/g, '');
 
-      // Validate filename is not empty after sanitization
-      if (!filename || filename.length === 0) {
+      // Validate filename is not empty and doesn't contain suspicious patterns
+      if (!filename || filename.length === 0 || filename.includes('..')) {
         console.error('[gift-image protocol] Invalid filename after sanitization');
         return new Response('Bad Request: Invalid filename', { status: 400 });
       }
 
       const imagesDir = path.join(app.getPath('userData'), 'gift-images');
-      const imagePath = path.join(imagesDir, filename);
+      const imagePath = path.resolve(imagesDir, filename); // Use resolve for absolute path
 
-      // SECURITY: Validate that resolved path is within the allowed directory
-      const normalizedPath = path.normalize(imagePath);
-      const normalizedDir = path.normalize(imagesDir);
-
-      if (!normalizedPath.startsWith(normalizedDir)) {
+      // SECURITY: Use path.relative to ensure the path is within allowed directory
+      const relativePath = path.relative(imagesDir, imagePath);
+      if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
         console.error(`[gift-image protocol] Path traversal attempt detected: ${request.url}`);
         return new Response('Forbidden: Path traversal detected', { status: 403 });
       }
 
-      console.log(`[gift-image protocol] Request: ${request.url} -> ${normalizedPath}`);
+      console.log(`[gift-image protocol] Request: ${request.url} -> ${imagePath}`);
 
       // Convert Windows path separators for file:// URL
-      const fileUrl = `file://${normalizedPath.replace(/\\/g, '/')}`;
+      const fileUrl = `file://${imagePath.replace(/\\/g, '/')}`;
       console.log(`[gift-image protocol] Fetching: ${fileUrl}`);
       return net.fetch(fileUrl);
     });
