@@ -146,23 +146,9 @@ class GameOperations {
     }
   }
 
-  async killPlayer() {
-    try {
-      console.log('KO\'ing player...');
-
-      // Set health to 0
-      await this.client.writeMemory(MEMORY_ADDRESSES.CURRENT_HEALTH, Buffer.from([0x00]));
-
-      // Apply damage to trigger death animation
-      await this.client.writeMemory(MEMORY_ADDRESSES.DAMAGE_TO_APPLY, Buffer.from([0x08]));
-
-      console.log('Player KO\'d');
-      return { success: true };
-    } catch (error) {
-      console.error('Error KO\'ing player:', error);
-      throw error;
-    }
-  }
+  // killPlayer method removed - using game-specific implementations
+  // For SMW: hoellOps.killPlayer (multi-sprite tester)
+  // For Zelda: implement separately if needed
 
   async warpToEasternPalace() {
     try {

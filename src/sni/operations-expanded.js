@@ -1165,18 +1165,8 @@ class ExpandedGameOperations {
   }
 
   // ============= KO PLAYER (MAIN ACTION) =============
-  async killPlayer() {
-    try {
-      // Set Mario to small and remove lives to trigger death
-      await this.setMarioPowerup(POWERUP_TYPES.SMALL);
-      await this.removeLife(1);
-      console.log('[killPlayer] Killed Mario');
-      return true;
-    } catch (error) {
-      console.error('[killPlayer] Error:', error.message);
-      return false;
-    }
-  }
+  // killPlayer method removed - using hoellOps version with poison mushroom multi-sprite tester
+  // The hoellOps.killPlayer will be called via fallback chain
 
   // ============= CATEGORY 5: CHAOS EFFECTS (Block/Floor Manipulation) =============
 

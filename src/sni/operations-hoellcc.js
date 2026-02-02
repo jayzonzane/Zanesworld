@@ -556,39 +556,15 @@ class HoellCCOperations {
    */
   async killPlayer() {
     try {
-      console.log('[killPlayer] Attempting to spawn poison mushroom for "Neighborhood of Make-Believe"...');
+      console.log('[killPlayer] Killing Mario by setting timer to 1 second...');
 
-      // Try multiple sprite IDs to find the poison mushroom
-      const spriteIds = [
-        { id: 0x4E, desc: 'Poison Mushroom (0x4E/78)', custom: false },
-        { id: 0x74, desc: 'Alt Poison Mushroom (0x74/116)', custom: false },
-        { id: 0xC7, desc: 'Custom Sprite Slot (0xC7/199)', custom: true },
-        { id: 0xC0, desc: 'Custom Sprite Slot (0xC0/192)', custom: true },
-        { id: 0xC1, desc: 'Custom Sprite Slot (0xC1/193)', custom: true }
-      ];
+      // Set game timer to 1 second to trigger time-up death
+      // Timer digits: 0x7E0F31 (hundreds), 0x7E0F32 (tens), 0x7E0F33 (ones)
+      await this.client.writeMemory(0x7E0F31, Buffer.from([0x00])); // Hundreds = 0
+      await this.client.writeMemory(0x7E0F32, Buffer.from([0x00])); // Tens = 0
+      await this.client.writeMemory(0x7E0F33, Buffer.from([0x01])); // Ones = 1
 
-      // Try each sprite ID until one works
-      for (const sprite of spriteIds) {
-        console.log(`[killPlayer] Trying ${sprite.desc}...`);
-        const result = await this.spawner.spawnSprite(sprite.id, 0, -8, sprite.custom);
-
-        if (result.success) {
-          console.log(`[killPlayer] ✓ Successfully spawned sprite ${sprite.desc}!`);
-          console.log('[killPlayer] Check if the right sprite appeared in-game');
-          return { success: true };
-        } else {
-          console.log(`[killPlayer] ✗ Failed: ${result.error || 'Unknown'}`);
-        }
-
-        // Small delay between attempts
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-
-      // If all sprite attempts failed, fall back to pit death
-      console.log('[killPlayer] All sprite attempts failed - using pit death fallback');
-      await this.client.writeMemory(0x7E0096, Buffer.from([0xFF]));
-      await this.client.writeMemory(0x7E0097, Buffer.from([0x02]));
-      console.log('[killPlayer] Pit death triggered');
+      console.log('[killPlayer] Timer set to 001 - time-up death will trigger in 1 second');
       return { success: true };
     } catch (error) {
       console.error('[killPlayer] Error:', error.message);
