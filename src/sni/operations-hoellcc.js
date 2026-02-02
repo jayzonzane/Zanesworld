@@ -556,21 +556,31 @@ class HoellCCOperations {
    */
   async killPlayer() {
     try {
-      console.log('[killPlayer] Spawning poison mushroom on Mario...');
+      console.log('[killPlayer] Attempting to spawn poison mushroom on Mario...');
 
-      // Spawn poison mushroom directly on Mario
-      // 0xC7 = sprite 199 (Invisible Mushroom slot, repurposed in ROM hacks)
-      // Spawn slightly above Mario (0 horizontal, -16 vertical) as custom sprite
-      const result = await this.spawner.spawnSprite(0xC7, 0, -16, true);
+      // Try common poison mushroom sprite IDs used in ROM hacks
+      const spriteIds = [
+        { id: 0x4E, desc: '78 - Poison Mushroom (common in many hacks)' },
+        { id: 0xC7, desc: '199 - Custom sprite slot 1' },
+        { id: 0xC0, desc: '192 - Custom sprite slot 2' },
+        { id: 0x74, desc: '116 - Alternative poison mushroom' }
+      ];
+
+      // Try the first sprite ID (most common)
+      const mainId = spriteIds[0];
+      console.log(`[killPlayer] Trying sprite ${mainId.desc}`);
+      const result = await this.spawner.spawnSprite(mainId.id, 0, -16, false);
 
       if (result.success) {
-        console.log('[killPlayer] Poison mushroom spawned successfully');
+        console.log('[killPlayer] Poison mushroom spawned successfully!');
         return { success: true };
       } else {
-        console.log('[killPlayer] Poison mushroom spawn failed, falling back to pit death');
+        console.log(`[killPlayer] Spawn failed: ${result.error || 'Unknown error'}`);
+        console.log('[killPlayer] Falling back to pit death');
         // Fallback: pit death
         await this.client.writeMemory(0x7E0096, Buffer.from([0xFF]));
         await this.client.writeMemory(0x7E0097, Buffer.from([0x02]));
+        console.log('[killPlayer] Pit death triggered');
         return { success: true };
       }
     } catch (error) {
