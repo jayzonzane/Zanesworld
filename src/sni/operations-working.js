@@ -155,14 +155,10 @@ class WorkingSMWOperations {
     try {
       console.log('[killPlayer] Killing Mario...');
 
-      // Set Mario to small (no powerup)
-      await this.setMarioPowerup(POWERUP_TYPES.SMALL);
+      // Trigger death by setting game mode to death animation (0x10)
+      await this.writeWithRetry(MEMORY_ADDRESSES.GAME_MODE, Buffer.from([0x10]));
 
-      // Set lives to 0 to trigger death
-      await this.writeWithRetry(MEMORY_ADDRESSES.LIVES, Buffer.from([0x00]));
-      await this.writeWithRetry(0x7E0DBE, Buffer.from([0x00]));
-
-      console.log('[killPlayer] Mario killed');
+      console.log('[killPlayer] Death animation triggered');
       return { success: true };
     } catch (error) {
       console.error('[killPlayer] Error:', error.message);

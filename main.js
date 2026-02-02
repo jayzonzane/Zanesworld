@@ -2492,7 +2492,13 @@ ipcMain.handle('execute-gift-action', async (event, actionData) => {
       return { success: false, error: 'No device connected' };
     }
 
-    const { action, params } = actionData;
+    let { action, params } = actionData;
+
+    // Handle special action aliases
+    if (action === 'addCoins50') {
+      action = 'addCoins';
+      params = { amount: 50 };
+    }
 
     // Use current connection mode operations
     const ops = connectionMode === 'lua' ? luaExpandedOps : expandedOps;
@@ -2506,6 +2512,8 @@ ipcMain.handle('execute-gift-action', async (event, actionData) => {
       targetOps = basicOps;
     } else if (typeof hoellOps[action] === 'function') {
       targetOps = hoellOps;
+    } else if (typeof luaHoellOps[action] === 'function') {
+      targetOps = luaHoellOps;
     } else {
       return { success: false, error: `Unknown action: ${action}` };
     }

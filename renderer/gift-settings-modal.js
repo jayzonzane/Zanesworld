@@ -1247,6 +1247,11 @@ saveBtn.addEventListener('click', async () => {
       if (typeof populateOverlayGiftSelection === 'function') {
         await populateOverlayGiftSelection(); // Don't force refresh - only update if gift list changed
       }
+
+      // Refresh action console to show updated mappings
+      if (typeof populateActionConsole === 'function') {
+        await populateActionConsole();
+      }
     } else {
       log(`Failed to save: ${result.error}`, 'error');
     }
