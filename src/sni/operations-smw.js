@@ -11,6 +11,7 @@
 
 const { MEMORY_ADDRESSES, POWERUP_TYPES, RESERVE_ITEMS, YOSHI_COLORS, SPRITE_TYPES, GAME_MODES, CONTROLLER_BUTTONS } = require('./memory-complete');
 const MarioModSpawner = require('./mariomod-spawner');
+const logger = require('../utils/logger');
 
 class SMWOperations {
   constructor(sniClient) {
@@ -71,7 +72,7 @@ class SMWOperations {
         y: (yHigh[0] << 8) | yLow[0]
       };
     } catch (error) {
-      console.error('[getMarioPosition] Error:', error.message);
+      logger.error('[getMarioPosition] Error:', error.message);
       return { x: 0, y: 0 };
     }
   }
@@ -86,7 +87,7 @@ class SMWOperations {
       }
       return -1;
     } catch (error) {
-      console.error('[findEmptySpriteSlot] Error:', error.message);
+      logger.error('[findEmptySpriteSlot] Error:', error.message);
       return -1;
     }
   }
@@ -98,7 +99,7 @@ class SMWOperations {
       }
 
       if (slotIndex === -1) {
-        console.log('[spawnSpriteAtPosition] No empty sprite slots available');
+        logger.debug('[spawnSpriteAtPosition] No empty sprite slots available');
         return false;
       }
 
@@ -116,10 +117,10 @@ class SMWOperations {
 
       await this.writeWithRetry(MEMORY_ADDRESSES.SPRITE_STATUS + slotIndex, Buffer.from([0x08]));
 
-      console.log(`[spawnSpriteAtPosition] Spawned sprite type ${spriteType} at slot ${slotIndex}, position (${x}, ${y})`);
+      logger.debug(`[spawnSpriteAtPosition] Spawned sprite type ${spriteType} at slot ${slotIndex}, position (${x}, ${y})`);
       return slotIndex;
     } catch (error) {
-      console.error('[spawnSpriteAtPosition] Error:', error.message);
+      logger.error('[spawnSpriteAtPosition] Error:', error.message);
       return false;
     }
   }
@@ -132,10 +133,10 @@ class SMWOperations {
   async setMarioPowerup(powerupType) {
     try {
       await this.writeWithRetry(MEMORY_ADDRESSES.POWERUP_STATUS, Buffer.from([powerupType]));
-      console.log(`[setMarioPowerup] Set power-up to ${powerupType}`);
+      logger.debug(`[setMarioPowerup] Set power-up to ${powerupType}`);
       return true;
     } catch (error) {
-      console.error('[setMarioPowerup] Error:', error.message);
+      logger.error('[setMarioPowerup] Error:', error.message);
       return false;
     }
   }
@@ -145,14 +146,14 @@ class SMWOperations {
       const current = await this.readWithRetry(MEMORY_ADDRESSES.POWERUP_STATUS, 1);
       if (current[0] === POWERUP_TYPES.SMALL) {
         await this.setMarioPowerup(POWERUP_TYPES.SUPER);
-        console.log('[giveMushroom] Upgraded Small Mario to Super Mario');
+        logger.debug('[giveMushroom] Upgraded Small Mario to Super Mario');
       } else {
         await this.writeWithRetry(MEMORY_ADDRESSES.RESERVE_ITEM, Buffer.from([RESERVE_ITEMS.MUSHROOM]));
-        console.log('[giveMushroom] Added mushroom to reserve');
+        logger.debug('[giveMushroom] Added mushroom to reserve');
       }
       return true;
     } catch (error) {
-      console.error('[giveMushroom] Error:', error.message);
+      logger.error('[giveMushroom] Error:', error.message);
       return false;
     }
   }
@@ -160,10 +161,10 @@ class SMWOperations {
   async giveFireFlower() {
     try {
       await this.setMarioPowerup(POWERUP_TYPES.FIRE);
-      console.log('[giveFireFlower] Gave Fire Flower');
+      logger.debug('[giveFireFlower] Gave Fire Flower');
       return true;
     } catch (error) {
-      console.error('[giveFireFlower] Error:', error.message);
+      logger.error('[giveFireFlower] Error:', error.message);
       return false;
     }
   }
@@ -171,10 +172,10 @@ class SMWOperations {
   async giveCapeFeather() {
     try {
       await this.setMarioPowerup(POWERUP_TYPES.CAPE);
-      console.log('[giveCapeFeather] Gave Cape Feather');
+      logger.debug('[giveCapeFeather] Gave Cape Feather');
       return true;
     } catch (error) {
-      console.error('[giveCapeFeather] Error:', error.message);
+      logger.error('[giveCapeFeather] Error:', error.message);
       return false;
     }
   }
@@ -183,10 +184,10 @@ class SMWOperations {
     try {
       const starDuration = Math.min(duration * 4, 255);
       await this.writeWithRetry(MEMORY_ADDRESSES.INVINCIBILITY_TIMER, Buffer.from([starDuration]));
-      console.log(`[giveStarman] Gave star power for ${duration} seconds`);
+      logger.debug(`[giveStarman] Gave star power for ${duration} seconds`);
       return true;
     } catch (error) {
-      console.error('[giveStarman] Error:', error.message);
+      logger.error('[giveStarman] Error:', error.message);
       return false;
     }
   }
@@ -194,10 +195,10 @@ class SMWOperations {
   async removePowerup() {
     try {
       await this.setMarioPowerup(POWERUP_TYPES.SMALL);
-      console.log('[removePowerup] Removed power-up (now Small Mario)');
+      logger.debug('[removePowerup] Removed power-up (now Small Mario)');
       return true;
     } catch (error) {
-      console.error('[removePowerup] Error:', error.message);
+      logger.error('[removePowerup] Error:', error.message);
       return false;
     }
   }
@@ -206,10 +207,10 @@ class SMWOperations {
     try {
       const pSwitchDuration = Math.min(duration * 4, 255);
       await this.writeWithRetry(MEMORY_ADDRESSES.P_SWITCH_TIMER, Buffer.from([pSwitchDuration]));
-      console.log(`[activatePSwitch] Activated P-Switch for ${duration} seconds`);
+      logger.debug(`[activatePSwitch] Activated P-Switch for ${duration} seconds`);
       return true;
     } catch (error) {
-      console.error('[activatePSwitch] Error:', error.message);
+      logger.error('[activatePSwitch] Error:', error.message);
       return false;
     }
   }
@@ -218,10 +219,10 @@ class SMWOperations {
     try {
       await this.writeWithRetry(MEMORY_ADDRESSES.YOSHI_COLOR, Buffer.from([color]));
       await this.writeWithRetry(0x7E187A, Buffer.from([0x01]));
-      console.log(`[giveYoshi] Gave ${Object.keys(YOSHI_COLORS)[color]} Yoshi - Mario should now be riding Yoshi`);
+      logger.debug(`[giveYoshi] Gave ${Object.keys(YOSHI_COLORS)[color]} Yoshi - Mario should now be riding Yoshi`);
       return true;
     } catch (error) {
-      console.error('[giveYoshi] Error:', error.message);
+      logger.error('[giveYoshi] Error:', error.message);
       return false;
     }
   }
@@ -229,10 +230,10 @@ class SMWOperations {
   async removeYoshi() {
     try {
       await this.writeWithRetry(MEMORY_ADDRESSES.YOSHI_COLOR, Buffer.from([0xFF]));
-      console.log('[removeYoshi] Removed Yoshi');
+      logger.debug('[removeYoshi] Removed Yoshi');
       return true;
     } catch (error) {
-      console.error('[removeYoshi] Error:', error.message);
+      logger.error('[removeYoshi] Error:', error.message);
       return false;
     }
   }
@@ -240,10 +241,10 @@ class SMWOperations {
   async giveReserveItem(itemType = RESERVE_ITEMS.MUSHROOM) {
     try {
       await this.writeWithRetry(MEMORY_ADDRESSES.RESERVE_ITEM, Buffer.from([itemType]));
-      console.log(`[giveReserveItem] Set reserve item to ${itemType}`);
+      logger.debug(`[giveReserveItem] Set reserve item to ${itemType}`);
       return true;
     } catch (error) {
-      console.error('[giveReserveItem] Error:', error.message);
+      logger.error('[giveReserveItem] Error:', error.message);
       return false;
     }
   }
@@ -251,10 +252,10 @@ class SMWOperations {
   async clearReserveItem() {
     try {
       await this.writeWithRetry(MEMORY_ADDRESSES.RESERVE_ITEM, Buffer.from([RESERVE_ITEMS.NONE]));
-      console.log('[clearReserveItem] Cleared reserve item');
+      logger.debug('[clearReserveItem] Cleared reserve item');
       return true;
     } catch (error) {
-      console.error('[clearReserveItem] Error:', error.message);
+      logger.error('[clearReserveItem] Error:', error.message);
       return false;
     }
   }
@@ -270,10 +271,10 @@ class SMWOperations {
       const newLives = Math.min(current[0] + count, 99);
       await this.writeWithRetry(MEMORY_ADDRESSES.LIVES, Buffer.from([newLives]));
       await this.writeWithRetry(0x7E0DBE, Buffer.from([newLives]));
-      console.log(`[addLife] Added ${count} life/lives (now ${newLives})`);
+      logger.debug(`[addLife] Added ${count} life/lives (now ${newLives})`);
       return true;
     } catch (error) {
-      console.error('[addLife] Error:', error.message);
+      logger.error('[addLife] Error:', error.message);
       return false;
     }
   }
@@ -284,10 +285,10 @@ class SMWOperations {
       const newLives = Math.max(current[0] - count, 0);
       await this.writeWithRetry(MEMORY_ADDRESSES.LIVES, Buffer.from([newLives]));
       await this.writeWithRetry(0x7E0DBE, Buffer.from([newLives]));
-      console.log(`[removeLife] Removed ${count} life/lives (now ${newLives})`);
+      logger.debug(`[removeLife] Removed ${count} life/lives (now ${newLives})`);
       return true;
     } catch (error) {
-      console.error('[removeLife] Error:', error.message);
+      logger.error('[removeLife] Error:', error.message);
       return false;
     }
   }
@@ -303,10 +304,10 @@ class SMWOperations {
       }
 
       await this.writeWithRetry(MEMORY_ADDRESSES.COINS, Buffer.from([newCoins]));
-      console.log(`[addCoins] Added ${amount} coins (now ${newCoins})`);
+      logger.debug(`[addCoins] Added ${amount} coins (now ${newCoins})`);
       return true;
     } catch (error) {
-      console.error('[addCoins] Error:', error.message);
+      logger.error('[addCoins] Error:', error.message);
       return false;
     }
   }
@@ -316,10 +317,10 @@ class SMWOperations {
       const current = await this.readWithRetry(MEMORY_ADDRESSES.COINS, 1);
       const newCoins = Math.max(current[0] - amount, 0);
       await this.writeWithRetry(MEMORY_ADDRESSES.COINS, Buffer.from([newCoins]));
-      console.log(`[removeCoins] Removed ${amount} coins (now ${newCoins})`);
+      logger.debug(`[removeCoins] Removed ${amount} coins (now ${newCoins})`);
       return true;
     } catch (error) {
-      console.error('[removeCoins] Error:', error.message);
+      logger.error('[removeCoins] Error:', error.message);
       return false;
     }
   }
@@ -332,10 +333,10 @@ class SMWOperations {
   async warpToLevel(levelID) {
     try {
       await this.writeWithRetry(MEMORY_ADDRESSES.TRANSLEVEL_NUMBER, Buffer.from([levelID]));
-      console.log(`[warpToLevel] Warped to level ${levelID.toString(16)}`);
+      logger.debug(`[warpToLevel] Warped to level ${levelID.toString(16)}`);
       return true;
     } catch (error) {
-      console.error('[warpToLevel] Error:', error.message);
+      logger.error('[warpToLevel] Error:', error.message);
       return false;
     }
   }
@@ -365,10 +366,10 @@ class SMWOperations {
   async forceSecretExit() {
     try {
       await this.writeWithRetry(MEMORY_ADDRESSES.EXIT_TYPE, Buffer.from([0x01]));
-      console.log('[forceSecretExit] Set exit type to secret');
+      logger.debug('[forceSecretExit] Set exit type to secret');
       return true;
     } catch (error) {
-      console.error('[forceSecretExit] Error:', error.message);
+      logger.error('[forceSecretExit] Error:', error.message);
       return false;
     }
   }
@@ -376,10 +377,10 @@ class SMWOperations {
   async setCheckpoint() {
     try {
       await this.writeWithRetry(MEMORY_ADDRESSES.CHECKPOINT_FLAG, Buffer.from([0x01]));
-      console.log('[setCheckpoint] Set midpoint checkpoint');
+      logger.debug('[setCheckpoint] Set midpoint checkpoint');
       return true;
     } catch (error) {
-      console.error('[setCheckpoint] Error:', error.message);
+      logger.error('[setCheckpoint] Error:', error.message);
       return false;
     }
   }
@@ -387,10 +388,10 @@ class SMWOperations {
   async clearCheckpoint() {
     try {
       await this.writeWithRetry(MEMORY_ADDRESSES.CHECKPOINT_FLAG, Buffer.from([0x00]));
-      console.log('[clearCheckpoint] Cleared checkpoint');
+      logger.debug('[clearCheckpoint] Cleared checkpoint');
       return true;
     } catch (error) {
-      console.error('[clearCheckpoint] Error:', error.message);
+      logger.error('[clearCheckpoint] Error:', error.message);
       return false;
     }
   }
@@ -398,10 +399,10 @@ class SMWOperations {
   async returnToWorldMap() {
     try {
       await this.writeWithRetry(MEMORY_ADDRESSES.GAME_MODE, Buffer.from([GAME_MODES.OVERWORLD]));
-      console.log('[returnToWorldMap] Returned to overworld');
+      logger.debug('[returnToWorldMap] Returned to overworld');
       return true;
     } catch (error) {
-      console.error('[returnToWorldMap] Error:', error.message);
+      logger.error('[returnToWorldMap] Error:', error.message);
       return false;
     }
   }
@@ -413,7 +414,7 @@ class SMWOperations {
 
   async modifyMarioSpeed(multiplier, duration = 30) {
     try {
-      console.log(`[modifyMarioSpeed] Modifying speed by ${multiplier}x for ${duration} seconds`);
+      logger.debug(`[modifyMarioSpeed] Modifying speed by ${multiplier}x for ${duration} seconds`);
 
       const interval = setInterval(async () => {
         const xSpeed = await this.readWithRetry(MEMORY_ADDRESSES.PLAYER_X_SPEED, 1);
@@ -434,12 +435,12 @@ class SMWOperations {
       setTimeout(() => {
         clearInterval(interval);
         this.activeTimers.delete('speedMod');
-        console.log('[modifyMarioSpeed] Speed modifier ended');
+        logger.debug('[modifyMarioSpeed] Speed modifier ended');
       }, duration * 1000);
 
       return true;
     } catch (error) {
-      console.error('[modifyMarioSpeed] Error:', error.message);
+      logger.error('[modifyMarioSpeed] Error:', error.message);
       return false;
     }
   }
@@ -454,7 +455,7 @@ class SMWOperations {
 
   async modifyJumpHeight(multiplier, duration = 30) {
     try {
-      console.log(`[modifyJumpHeight] Modifying jump height by ${multiplier}x for ${duration} seconds`);
+      logger.debug(`[modifyJumpHeight] Modifying jump height by ${multiplier}x for ${duration} seconds`);
 
       const interval = setInterval(async () => {
         const ySpeed = await this.readWithRetry(MEMORY_ADDRESSES.PLAYER_Y_SPEED, 1);
@@ -472,19 +473,19 @@ class SMWOperations {
       setTimeout(() => {
         clearInterval(interval);
         this.activeTimers.delete('jumpMod');
-        console.log('[modifyJumpHeight] Jump modifier ended');
+        logger.debug('[modifyJumpHeight] Jump modifier ended');
       }, duration * 1000);
 
       return true;
     } catch (error) {
-      console.error('[modifyJumpHeight] Error:', error.message);
+      logger.error('[modifyJumpHeight] Error:', error.message);
       return false;
     }
   }
 
   async moonJump(duration = 30) {
     try {
-      console.log(`[moonJump] Moon jump for ${duration} seconds - caps at screen top`);
+      logger.debug(`[moonJump] Moon jump for ${duration} seconds - caps at screen top`);
 
       const interval = setInterval(async () => {
         const ySpeed = await this.readWithRetry(MEMORY_ADDRESSES.PLAYER_Y_SPEED, 1);
@@ -507,12 +508,12 @@ class SMWOperations {
       setTimeout(() => {
         clearInterval(interval);
         this.activeTimers.delete('jumpMod');
-        console.log('[moonJump] Moon jump ended');
+        logger.debug('[moonJump] Moon jump ended');
       }, duration * 1000);
 
       return true;
     } catch (error) {
-      console.error('[moonJump] Error:', error.message);
+      logger.error('[moonJump] Error:', error.message);
       return false;
     }
   }
@@ -523,7 +524,7 @@ class SMWOperations {
 
   async modifyGravity(multiplier, duration = 30) {
     try {
-      console.log(`[modifyGravity] Modifying gravity by ${multiplier}x for ${duration} seconds`);
+      logger.debug(`[modifyGravity] Modifying gravity by ${multiplier}x for ${duration} seconds`);
 
       const interval = setInterval(async () => {
         const ySpeed = await this.readWithRetry(MEMORY_ADDRESSES.PLAYER_Y_SPEED, 1);
@@ -541,12 +542,12 @@ class SMWOperations {
       setTimeout(() => {
         clearInterval(interval);
         this.activeTimers.delete('gravityMod');
-        console.log('[modifyGravity] Gravity modifier ended');
+        logger.debug('[modifyGravity] Gravity modifier ended');
       }, duration * 1000);
 
       return true;
     } catch (error) {
-      console.error('[modifyGravity] Error:', error.message);
+      logger.error('[modifyGravity] Error:', error.message);
       return false;
     }
   }
@@ -561,7 +562,7 @@ class SMWOperations {
 
   async reverseControls(duration = 20) {
     try {
-      console.log(`[reverseControls] Reversing controls for ${duration} seconds`);
+      logger.debug(`[reverseControls] Reversing controls for ${duration} seconds`);
 
       const interval = setInterval(async () => {
         const controller = await this.readWithRetry(MEMORY_ADDRESSES.CONTROLLER_1_CURRENT, 1);
@@ -586,19 +587,19 @@ class SMWOperations {
       setTimeout(() => {
         clearInterval(interval);
         this.activeTimers.delete('reverseControls');
-        console.log('[reverseControls] Controls restored');
+        logger.debug('[reverseControls] Controls restored');
       }, duration * 1000);
 
       return true;
     } catch (error) {
-      console.error('[reverseControls] Error:', error.message);
+      logger.error('[reverseControls] Error:', error.message);
       return false;
     }
   }
 
   async enableIcePhysics(duration = 30) {
     try {
-      console.log(`[enableIcePhysics] Enabling ice physics for ${duration} seconds`);
+      logger.debug(`[enableIcePhysics] Enabling ice physics for ${duration} seconds`);
 
       const interval = setInterval(async () => {
         const xSpeed = await this.readWithRetry(MEMORY_ADDRESSES.PLAYER_X_SPEED, 1);
@@ -616,19 +617,19 @@ class SMWOperations {
       setTimeout(() => {
         clearInterval(interval);
         this.activeTimers.delete('icePhysics');
-        console.log('[enableIcePhysics] Ice physics ended');
+        logger.debug('[enableIcePhysics] Ice physics ended');
       }, duration * 1000);
 
       return true;
     } catch (error) {
-      console.error('[enableIcePhysics] Error:', error.message);
+      logger.error('[enableIcePhysics] Error:', error.message);
       return false;
     }
   }
 
   async disableRunning(duration = 20) {
     try {
-      console.log(`[disableRunning] Disabling running for ${duration} seconds`);
+      logger.debug(`[disableRunning] Disabling running for ${duration} seconds`);
 
       const interval = setInterval(async () => {
         await this.writeWithRetry(MEMORY_ADDRESSES.P_METER, Buffer.from([0x00]));
@@ -646,19 +647,19 @@ class SMWOperations {
       setTimeout(() => {
         clearInterval(interval);
         this.activeTimers.delete('disableRunning');
-        console.log('[disableRunning] Running re-enabled');
+        logger.debug('[disableRunning] Running re-enabled');
       }, duration * 1000);
 
       return true;
     } catch (error) {
-      console.error('[disableRunning] Error:', error.message);
+      logger.error('[disableRunning] Error:', error.message);
       return false;
     }
   }
 
   async forceContinuousRun(duration = 20) {
     try {
-      console.log(`[forceContinuousRun] Forcing continuous run for ${duration} seconds`);
+      logger.debug(`[forceContinuousRun] Forcing continuous run for ${duration} seconds`);
 
       const interval = setInterval(async () => {
         await this.writeWithRetry(MEMORY_ADDRESSES.P_METER, Buffer.from([112]));
@@ -676,18 +677,18 @@ class SMWOperations {
       setTimeout(() => {
         clearInterval(interval);
         this.activeTimers.delete('forceContinuousRun');
-        console.log('[forceContinuousRun] Forced run ended');
+        logger.debug('[forceContinuousRun] Forced run ended');
       }, duration * 1000);
 
       return true;
     } catch (error) {
-      console.error('[forceContinuousRun] Error:', error.message);
+      logger.error('[forceContinuousRun] Error:', error.message);
       return false;
     }
   }
 
   async randomPhysicsChaos(duration = 30) {
-    console.log(`[randomPhysicsChaos] Starting chaos for ${duration} seconds - switching effects every 3-5s`);
+    logger.debug(`[randomPhysicsChaos] Starting chaos for ${duration} seconds - switching effects every 3-5s`);
 
     let lastEffect = null;
     let currentTimer = null;
@@ -716,7 +717,7 @@ class SMWOperations {
 
     const applyNextEffect = async () => {
       if (Date.now() >= endTime) {
-        console.log('[randomPhysicsChaos] Chaos ended');
+        logger.debug('[randomPhysicsChaos] Chaos ended');
         if (currentTimer) clearTimeout(currentTimer);
         this.activeTimers.delete('randomChaos');
         return;
@@ -732,7 +733,7 @@ class SMWOperations {
 
       const effect = pickRandomEffect();
       const effectDuration = 3 + Math.random() * 2;
-      console.log(`[randomPhysicsChaos] Applying ${effect} for ${effectDuration.toFixed(1)}s`);
+      logger.debug(`[randomPhysicsChaos] Applying ${effect} for ${effectDuration.toFixed(1)}s`);
 
       await this[effect](effectDuration);
 
@@ -831,12 +832,12 @@ class SMWOperations {
           await this.client.writeMemory(this.ADDR_PLAYER_X_SPEED, Buffer.from([0x00]));
           await this.client.writeMemory(this.ADDR_PLAYER_Y_SPEED, Buffer.from([0x00]));
         } catch (err) {
-          console.error('[freezePlayer] Error locking speeds:', err.message);
+          logger.error('[freezePlayer] Error locking speeds:', err.message);
         }
       }, 16);
 
       this.activeTimers.set('freezePlayer', interval);
-      console.log('[freezePlayer] Player frozen');
+      logger.debug('[freezePlayer] Player frozen');
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
@@ -848,7 +849,7 @@ class SMWOperations {
       if (this.activeTimers.has('freezePlayer')) {
         clearInterval(this.activeTimers.get('freezePlayer'));
         this.activeTimers.delete('freezePlayer');
-        console.log('[unfreezePlayer] Player unfrozen');
+        logger.debug('[unfreezePlayer] Player unfrozen');
       }
       return { success: true };
     } catch (error) {
@@ -926,10 +927,10 @@ class SMWOperations {
     try {
       const pos = await this.getMarioPosition();
       const slot = await this.spawnSpriteAtPosition(spriteType, pos.x + offsetX, pos.y + offsetY);
-      console.log(`[spawnEnemyNearMario] Spawned sprite ${spriteType} near Mario`);
+      logger.debug(`[spawnEnemyNearMario] Spawned sprite ${spriteType} near Mario`);
       return slot !== false;
     } catch (error) {
-      console.error('[spawnEnemyNearMario] Error:', error.message);
+      logger.error('[spawnEnemyNearMario] Error:', error.message);
       return false;
     }
   }
@@ -953,7 +954,7 @@ class SMWOperations {
 
   async spawnEnemyWave(count = 5, duration = 30) {
     try {
-      console.log(`[spawnEnemyWave] Starting enemy wave: ${count} enemies for ${duration} seconds`);
+      logger.debug(`[spawnEnemyWave] Starting enemy wave: ${count} enemies for ${duration} seconds`);
 
       for (let i = 0; i < Math.min(count, 3); i++) {
         await this.spawnRandomEnemy();
@@ -969,19 +970,19 @@ class SMWOperations {
       setTimeout(() => {
         clearInterval(interval);
         this.activeTimers.delete('enemyWave');
-        console.log('[spawnEnemyWave] Enemy wave ended');
+        logger.debug('[spawnEnemyWave] Enemy wave ended');
       }, duration * 1000);
 
       return true;
     } catch (error) {
-      console.error('[spawnEnemyWave] Error:', error.message);
+      logger.error('[spawnEnemyWave] Error:', error.message);
       return false;
     }
   }
 
   async spawnKoopaWave(duration = 20) {
     try {
-      console.log(`[spawnKoopaWave] Spawning Koopa wave for ${duration} seconds`);
+      logger.debug(`[spawnKoopaWave] Spawning Koopa wave for ${duration} seconds`);
 
       const interval = setInterval(async () => {
         const koopaTypes = [
@@ -999,19 +1000,19 @@ class SMWOperations {
       setTimeout(() => {
         clearInterval(interval);
         this.activeTimers.delete('koopaWave');
-        console.log('[spawnKoopaWave] Koopa wave ended');
+        logger.debug('[spawnKoopaWave] Koopa wave ended');
       }, duration * 1000);
 
       return true;
     } catch (error) {
-      console.error('[spawnKoopaWave] Error:', error.message);
+      logger.error('[spawnKoopaWave] Error:', error.message);
       return false;
     }
   }
 
   async spawnBuzzyBeetleWave(duration = 20) {
     try {
-      console.log(`[spawnBuzzyBeetleWave] Spawning Buzzy Beetle wave for ${duration} seconds`);
+      logger.debug(`[spawnBuzzyBeetleWave] Spawning Buzzy Beetle wave for ${duration} seconds`);
 
       const interval = setInterval(async () => {
         await this.spawnEnemyNearMario(SPRITE_TYPES.BUZZY_BEETLE, 40, -16);
@@ -1022,19 +1023,19 @@ class SMWOperations {
       setTimeout(() => {
         clearInterval(interval);
         this.activeTimers.delete('buzzyWave');
-        console.log('[spawnBuzzyBeetleWave] Buzzy Beetle wave ended');
+        logger.debug('[spawnBuzzyBeetleWave] Buzzy Beetle wave ended');
       }, duration * 1000);
 
       return true;
     } catch (error) {
-      console.error('[spawnBuzzyBeetleWave] Error:', error.message);
+      logger.error('[spawnBuzzyBeetleWave] Error:', error.message);
       return false;
     }
   }
 
   async spawnPiranhaPlantWave(duration = 20) {
     try {
-      console.log(`[spawnPiranhaPlantWave] Spawning Piranha Plant wave for ${duration} seconds`);
+      logger.debug(`[spawnPiranhaPlantWave] Spawning Piranha Plant wave for ${duration} seconds`);
 
       const interval = setInterval(async () => {
         const offset = Math.random() > 0.5 ? 64 : -64;
@@ -1046,12 +1047,12 @@ class SMWOperations {
       setTimeout(() => {
         clearInterval(interval);
         this.activeTimers.delete('piranhaWave');
-        console.log('[spawnPiranhaPlantWave] Piranha Plant wave ended');
+        logger.debug('[spawnPiranhaPlantWave] Piranha Plant wave ended');
       }, duration * 1000);
 
       return true;
     } catch (error) {
-      console.error('[spawnPiranhaPlantWave] Error:', error.message);
+      logger.error('[spawnPiranhaPlantWave] Error:', error.message);
       return false;
     }
   }
@@ -1069,17 +1070,17 @@ class SMWOperations {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
 
-      console.log(`[spawnBooCircle] Spawned ${count} Boos in circle`);
+      logger.debug(`[spawnBooCircle] Spawned ${count} Boos in circle`);
       return true;
     } catch (error) {
-      console.error('[spawnBooCircle] Error:', error.message);
+      logger.error('[spawnBooCircle] Error:', error.message);
       return false;
     }
   }
 
   async spawnBulletBillBarrage(duration = 15) {
     try {
-      console.log(`[spawnBulletBillBarrage] Starting Bullet Bill barrage for ${duration} seconds`);
+      logger.debug(`[spawnBulletBillBarrage] Starting Bullet Bill barrage for ${duration} seconds`);
 
       const interval = setInterval(async () => {
         await this.spawnEnemyNearMario(SPRITE_TYPES.BULLET_BILL, 80, Math.floor(Math.random() * 40) - 20);
@@ -1090,12 +1091,12 @@ class SMWOperations {
       setTimeout(() => {
         clearInterval(interval);
         this.activeTimers.delete('bulletBillBarrage');
-        console.log('[spawnBulletBillBarrage] Bullet Bill barrage ended');
+        logger.debug('[spawnBulletBillBarrage] Bullet Bill barrage ended');
       }, duration * 1000);
 
       return true;
     } catch (error) {
-      console.error('[spawnBulletBillBarrage] Error:', error.message);
+      logger.error('[spawnBulletBillBarrage] Error:', error.message);
       return false;
     }
   }
@@ -1104,10 +1105,10 @@ class SMWOperations {
     try {
       const pos = await this.getMarioPosition();
       await this.spawnSpriteAtPosition(SPRITE_TYPES.THWOMP, pos.x, pos.y - 64);
-      console.log('[spawnThwomp] Spawned Thwomp above Mario');
+      logger.debug('[spawnThwomp] Spawned Thwomp above Mario');
       return true;
     } catch (error) {
-      console.error('[spawnThwomp] Error:', error.message);
+      logger.error('[spawnThwomp] Error:', error.message);
       return false;
     }
   }
@@ -1115,10 +1116,10 @@ class SMWOperations {
   async spawnCharginChuck() {
     try {
       await this.spawnEnemyNearMario(SPRITE_TYPES.CHARGIN_CHUCK, 48, 0);
-      console.log('[spawnCharginChuck] Spawned Chargin\' Chuck');
+      logger.debug('[spawnCharginChuck] Spawned Chargin\' Chuck');
       return true;
     } catch (error) {
-      console.error('[spawnCharginChuck] Error:', error.message);
+      logger.error('[spawnCharginChuck] Error:', error.message);
       return false;
     }
   }
@@ -1126,10 +1127,10 @@ class SMWOperations {
   async spawnBobOmb() {
     try {
       await this.spawnEnemyNearMario(SPRITE_TYPES.BOB_OMB, 32, -16);
-      console.log('[spawnBobOmb] Spawned Bob-omb');
+      logger.debug('[spawnBobOmb] Spawned Bob-omb');
       return true;
     } catch (error) {
-      console.error('[spawnBobOmb] Error:', error.message);
+      logger.error('[spawnBobOmb] Error:', error.message);
       return false;
     }
   }
@@ -1137,10 +1138,10 @@ class SMWOperations {
   async spawnMagikoopa() {
     try {
       await this.spawnEnemyNearMario(SPRITE_TYPES.MAGIKOOPA, 64, -32);
-      console.log('[spawnMagikoopa] Spawned Magikoopa');
+      logger.debug('[spawnMagikoopa] Spawned Magikoopa');
       return true;
     } catch (error) {
-      console.error('[spawnMagikoopa] Error:', error.message);
+      logger.error('[spawnMagikoopa] Error:', error.message);
       return false;
     }
   }
@@ -1148,10 +1149,10 @@ class SMWOperations {
   async spawnDryBones() {
     try {
       await this.spawnEnemyNearMario(SPRITE_TYPES.DRY_BONES, 40, 0);
-      console.log('[spawnDryBones] Spawned Dry Bones');
+      logger.debug('[spawnDryBones] Spawned Dry Bones');
       return true;
     } catch (error) {
-      console.error('[spawnDryBones] Error:', error.message);
+      logger.error('[spawnDryBones] Error:', error.message);
       return false;
     }
   }
@@ -1161,17 +1162,17 @@ class SMWOperations {
       for (let i = 0; i < 12; i++) {
         await this.writeWithRetry(MEMORY_ADDRESSES.SPRITE_STATUS + i, Buffer.from([0x00]));
       }
-      console.log('[clearAllEnemies] Cleared all enemy sprites');
+      logger.debug('[clearAllEnemies] Cleared all enemy sprites');
       return true;
     } catch (error) {
-      console.error('[clearAllEnemies] Error:', error.message);
+      logger.error('[clearAllEnemies] Error:', error.message);
       return false;
     }
   }
 
   async makeEnemiesInvisible(duration = 30) {
     try {
-      console.log(`[makeEnemiesInvisible] Making enemies invisible for ${duration} seconds`);
+      logger.debug(`[makeEnemiesInvisible] Making enemies invisible for ${duration} seconds`);
 
       const interval = setInterval(async () => {
         for (let i = 0; i < 128; i++) {
@@ -1185,19 +1186,19 @@ class SMWOperations {
       setTimeout(() => {
         clearInterval(interval);
         this.activeTimers.delete('invisibleEnemies');
-        console.log('[makeEnemiesInvisible] Enemy visibility restored');
+        logger.debug('[makeEnemiesInvisible] Enemy visibility restored');
       }, duration * 1000);
 
       return true;
     } catch (error) {
-      console.error('[makeEnemiesInvisible] Error:', error.message);
+      logger.error('[makeEnemiesInvisible] Error:', error.message);
       return false;
     }
   }
 
   async doubleEnemySpeed(duration = 20) {
     try {
-      console.log(`[doubleEnemySpeed] Doubling enemy speed for ${duration} seconds`);
+      logger.debug(`[doubleEnemySpeed] Doubling enemy speed for ${duration} seconds`);
 
       const interval = setInterval(async () => {
         for (let i = 0; i < 12; i++) {
@@ -1223,12 +1224,12 @@ class SMWOperations {
       setTimeout(() => {
         clearInterval(interval);
         this.activeTimers.delete('doubleEnemySpeed');
-        console.log('[doubleEnemySpeed] Enemy speed restored');
+        logger.debug('[doubleEnemySpeed] Enemy speed restored');
       }, duration * 1000);
 
       return true;
     } catch (error) {
-      console.error('[doubleEnemySpeed] Error:', error.message);
+      logger.error('[doubleEnemySpeed] Error:', error.message);
       return false;
     }
   }
@@ -1236,10 +1237,10 @@ class SMWOperations {
   async spawnRex() {
     try {
       await this.spawnEnemyNearMario(SPRITE_TYPES.REX, 40, 0);
-      console.log('[spawnRex] Spawned Rex');
+      logger.debug('[spawnRex] Spawned Rex');
       return true;
     } catch (error) {
-      console.error('[spawnRex] Error:', error.message);
+      logger.error('[spawnRex] Error:', error.message);
       return false;
     }
   }
@@ -1247,10 +1248,10 @@ class SMWOperations {
   async spawnWiggler() {
     try {
       await this.spawnEnemyNearMario(SPRITE_TYPES.WIGGLER, 48, 0);
-      console.log('[spawnWiggler] Spawned Wiggler');
+      logger.debug('[spawnWiggler] Spawned Wiggler');
       return true;
     } catch (error) {
-      console.error('[spawnWiggler] Error:', error.message);
+      logger.error('[spawnWiggler] Error:', error.message);
       return false;
     }
   }
@@ -1260,17 +1261,17 @@ class SMWOperations {
       const bossSprite = bossType === 'bowser' ? SPRITE_TYPES.BOWSER : SPRITE_TYPES.REZNOR;
       const pos = await this.getMarioPosition();
       await this.spawnSpriteAtPosition(bossSprite, pos.x + 64, pos.y);
-      console.log(`[spawnBoss] Spawned ${bossType}`);
+      logger.debug(`[spawnBoss] Spawned ${bossType}`);
       return true;
     } catch (error) {
-      console.error('[spawnBoss] Error:', error.message);
+      logger.error('[spawnBoss] Error:', error.message);
       return false;
     }
   }
 
   async spawnRandomBlocks(count = 5) {
     try {
-      console.log(`[spawnRandomBlocks] Spawning ${count} random blocks around Mario`);
+      logger.debug(`[spawnRandomBlocks] Spawning ${count} random blocks around Mario`);
 
       const pos = await this.getMarioPosition();
 
@@ -1291,17 +1292,17 @@ class SMWOperations {
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 
-      console.log(`[spawnRandomBlocks] Spawned ${count} random blocks`);
+      logger.debug(`[spawnRandomBlocks] Spawned ${count} random blocks`);
       return true;
     } catch (error) {
-      console.error('[spawnRandomBlocks] Error:', error.message);
+      logger.error('[spawnRandomBlocks] Error:', error.message);
       return false;
     }
   }
 
   async removeFloorBlocks(count = 3, duration = 20) {
     try {
-      console.log(`[removeFloorBlocks] Creating ${count} floor hazards for ${duration} seconds`);
+      logger.debug(`[removeFloorBlocks] Creating ${count} floor hazards for ${duration} seconds`);
 
       const interval = setInterval(async () => {
         const pos = await this.getMarioPosition();
@@ -1317,12 +1318,12 @@ class SMWOperations {
       setTimeout(() => {
         clearInterval(interval);
         this.activeTimers.delete('floorRemoval');
-        console.log('[removeFloorBlocks] Floor hazard spawning ended');
+        logger.debug('[removeFloorBlocks] Floor hazard spawning ended');
       }, duration * 1000);
 
       return true;
     } catch (error) {
-      console.error('[removeFloorBlocks] Error:', error.message);
+      logger.error('[removeFloorBlocks] Error:', error.message);
       return false;
     }
   }
@@ -1519,32 +1520,32 @@ class SMWOperations {
   }
 
   async spawnLakituCloud() {
-    console.log('[spawnLakituCloud] Not implemented - cloud requires specific level context');
+    logger.debug('[spawnLakituCloud] Not implemented - cloud requires specific level context');
     return { success: false, error: 'Cloud spawn not available' };
   }
 
   async spawnBluePSwitch() {
-    console.log('[spawnBluePSwitch] Disabled - incorrect sprite ID for MarioMod');
+    logger.debug('[spawnBluePSwitch] Disabled - incorrect sprite ID for MarioMod');
     return { success: false, error: 'Blue P-Switch spawn needs correct MarioMod sprite ID' };
   }
 
   async spawnBeanstalk() {
-    console.log('[spawnBeanstalk] Disabled - may require specific level context');
+    logger.debug('[spawnBeanstalk] Disabled - may require specific level context');
     return { success: false, error: 'Beanstalk spawn needs area detection' };
   }
 
   async spawnKey() {
-    console.log('[spawnKey] Disabled - spawns incorrect sprite');
+    logger.debug('[spawnKey] Disabled - spawns incorrect sprite');
     return { success: false, error: 'Key spawn needs correct MarioMod sprite ID' };
   }
 
   async spawnSpringboard() {
-    console.log('[spawnSpringboard] Disabled - spawns incorrect sprite');
+    logger.debug('[spawnSpringboard] Disabled - spawns incorrect sprite');
     return { success: false, error: 'Springboard spawn needs correct MarioMod sprite ID' };
   }
 
   async spawnPSwitch() {
-    console.log('[spawnPSwitch] Disabled - incorrect sprite ID for MarioMod');
+    logger.debug('[spawnPSwitch] Disabled - incorrect sprite ID for MarioMod');
     return { success: false, error: 'P-Switch spawn needs correct MarioMod sprite ID' };
   }
 
@@ -1555,16 +1556,16 @@ class SMWOperations {
 
   async killPlayer() {
     try {
-      console.log('[killPlayer] Killing Mario by setting timer to 1 second...');
+      logger.debug('[killPlayer] Killing Mario by setting timer to 1 second...');
 
       await this.client.writeMemory(0x7E0F31, Buffer.from([0x00]));
       await this.client.writeMemory(0x7E0F32, Buffer.from([0x00]));
       await this.client.writeMemory(0x7E0F33, Buffer.from([0x01]));
 
-      console.log('[killPlayer] Timer set to 001 - time-up death will trigger in 1 second');
+      logger.debug('[killPlayer] Timer set to 001 - time-up death will trigger in 1 second');
       return { success: true };
     } catch (error) {
-      console.error('[killPlayer] Error:', error.message);
+      logger.error('[killPlayer] Error:', error.message);
       return { success: false, error: error.message };
     }
   }
@@ -1586,10 +1587,10 @@ class SMWOperations {
           const isJumping = yVel < -5;
 
           if (isJumping && !wasJumping) {
-            console.log('[spawnKaizoBlock] Jump START detected - spawning blocks NOW');
+            logger.debug('[spawnKaizoBlock] Jump START detected - spawning blocks NOW');
 
             if (allSpawnedBlocks.length >= MAX_BLOCKS) {
-              console.log(`[spawnKaizoBlock] Block limit reached (${MAX_BLOCKS}) - skipping spawn`);
+              logger.debug(`[spawnKaizoBlock] Block limit reached (${MAX_BLOCKS}) - skipping spawn`);
               wasJumping = isJumping;
               return;
             }
@@ -1621,12 +1622,12 @@ class SMWOperations {
               allSpawnedBlocks.push(offset);
             }
 
-            console.log(`[spawnKaizoBlock] Spawned ${blockOffsets.length} blocks at jump start (xVel: ${xVel})`);
+            logger.debug(`[spawnKaizoBlock] Spawned ${blockOffsets.length} blocks at jump start (xVel: ${xVel})`);
           }
 
           wasJumping = isJumping;
         } catch (error) {
-          console.error('[spawnKaizoBlock] Monitor error:', error.message);
+          logger.error('[spawnKaizoBlock] Monitor error:', error.message);
           clearInterval(checkInterval);
           this.activeTimers.delete('spawnKaizoBlock');
         }
@@ -1638,14 +1639,14 @@ class SMWOperations {
         if (this.activeTimers.has('spawnKaizoBlock')) {
           clearInterval(this.activeTimers.get('spawnKaizoBlock'));
           this.activeTimers.delete('spawnKaizoBlock');
-          console.log('[spawnKaizoBlock] Timeout - no jump button press detected');
+          logger.debug('[spawnKaizoBlock] Timeout - no jump button press detected');
         }
       }, 10000);
 
-      console.log('[spawnKaizoBlock] Armed - waiting for jump...');
+      logger.debug('[spawnKaizoBlock] Armed - waiting for jump...');
       return { success: true };
     } catch (error) {
-      console.error('[spawnKaizoBlock] Error:', error.message);
+      logger.error('[spawnKaizoBlock] Error:', error.message);
       return { success: false, error: error.message };
     }
   }
@@ -1664,7 +1665,7 @@ class SMWOperations {
 
   async despawnFloorBlocks() {
     try {
-      console.log('[despawnFloorBlocks] Creating pit ahead of Mario');
+      logger.debug('[despawnFloorBlocks] Creating pit ahead of Mario');
 
       const xSpeed = await this.client.readMemory(0x7E007B, 1);
       const xVel = xSpeed[0] << 24 >> 24;
@@ -1672,13 +1673,13 @@ class SMWOperations {
       let pitStartX;
       if (xVel > 0) {
         pitStartX = 48 + Math.floor(Math.random() * 17);
-        console.log(`[despawnFloorBlocks] Moving right - pit at +${pitStartX}px`);
+        logger.debug(`[despawnFloorBlocks] Moving right - pit at +${pitStartX}px`);
       } else if (xVel < 0) {
         pitStartX = -(48 + Math.floor(Math.random() * 17));
-        console.log(`[despawnFloorBlocks] Moving left - pit at ${pitStartX}px`);
+        logger.debug(`[despawnFloorBlocks] Moving left - pit at ${pitStartX}px`);
       } else {
         pitStartX = Math.random() < 0.5 ? 48 : -48;
-        console.log(`[despawnFloorBlocks] Standing still - random pit at ${pitStartX > 0 ? '+' : ''}${pitStartX}px`);
+        logger.debug(`[despawnFloorBlocks] Standing still - random pit at ${pitStartX > 0 ? '+' : ''}${pitStartX}px`);
       }
 
       const pitWidth = 3 + Math.floor(Math.random() * 2);
@@ -1695,17 +1696,17 @@ class SMWOperations {
         await this.spawner.spawnBlockViaMarioMod(0x0025, block.x, block.y);
       }
 
-      console.log(`[despawnFloorBlocks] Created ${pitWidth}-block wide pit ahead of Mario`);
+      logger.debug(`[despawnFloorBlocks] Created ${pitWidth}-block wide pit ahead of Mario`);
       return { success: true };
     } catch (error) {
-      console.error('[despawnFloorBlocks] Error:', error.message);
+      logger.error('[despawnFloorBlocks] Error:', error.message);
       return { success: false, error: error.message };
     }
   }
 
   async floorToLava() {
     try {
-      console.log('[floorToLava] Spawning grinders ahead of Mario');
+      logger.debug('[floorToLava] Spawning grinders ahead of Mario');
 
       const xSpeed = await this.client.readMemory(0x7E007B, 1);
       const xVel = xSpeed[0] << 24 >> 24;
@@ -1713,13 +1714,13 @@ class SMWOperations {
       let spawnStartX;
       if (xVel > 0) {
         spawnStartX = 48 + Math.floor(Math.random() * 17);
-        console.log(`[floorToLava] Moving right - grinders at +${spawnStartX}px`);
+        logger.debug(`[floorToLava] Moving right - grinders at +${spawnStartX}px`);
       } else if (xVel < 0) {
         spawnStartX = -(48 + Math.floor(Math.random() * 17));
-        console.log(`[floorToLava] Moving left - grinders at ${spawnStartX}px`);
+        logger.debug(`[floorToLava] Moving left - grinders at ${spawnStartX}px`);
       } else {
         spawnStartX = Math.random() < 0.5 ? 48 : -48;
-        console.log(`[floorToLava] Standing still - random grinders at ${spawnStartX > 0 ? '+' : ''}${spawnStartX}px`);
+        logger.debug(`[floorToLava] Standing still - random grinders at ${spawnStartX > 0 ? '+' : ''}${spawnStartX}px`);
       }
 
       const numGrinders = 2 + Math.floor(Math.random() * 2);
@@ -1738,10 +1739,10 @@ class SMWOperations {
         );
       }
 
-      console.log(`[floorToLava] Spawned ${numGrinders} grinders ahead of Mario`);
+      logger.debug(`[floorToLava] Spawned ${numGrinders} grinders ahead of Mario`);
       return { success: true };
     } catch (error) {
-      console.error('[floorToLava] Error:', error.message);
+      logger.error('[floorToLava] Error:', error.message);
       return { success: false, error: error.message };
     }
   }
@@ -1772,7 +1773,7 @@ class SMWOperations {
 
       return 'universal';
     } catch (error) {
-      console.error('[detectSpriteTileset] Error detecting tileset:', error.message);
+      logger.error('[detectSpriteTileset] Error detecting tileset:', error.message);
       return 'universal';
     }
   }
@@ -1810,7 +1811,7 @@ class SMWOperations {
       clearInterval(timer);
     }
     this.activeTimers.clear();
-    console.log('[cleanup] Cleared all active timers and intervals');
+    logger.debug('[cleanup] Cleared all active timers and intervals');
   }
 }
 

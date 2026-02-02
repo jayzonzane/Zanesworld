@@ -2,6 +2,8 @@
  * HoellStream Poller
  * Polls the HoellStream API for TikTok gift events and forwards them to EventProcessor
  */
+const logger = require('../utils/logger');
+
 class HoellStreamPoller {
   constructor(gameOperations, basicOperations, config = {}) {
     this.gameOps = gameOperations;  // expandedOps (kept for backward compatibility)
@@ -249,7 +251,7 @@ class HoellStreamPoller {
   }
 
   /**
-   * Internal logging helper
+   * Internal logging helper - uses configurable logger for performance
    */
   log(message, level = 'info') {
     const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
@@ -257,16 +259,19 @@ class HoellStreamPoller {
 
     switch (level) {
       case 'error':
-        console.error(`${prefix} ${message}`);
+        logger.error(`${prefix} ${message}`);
         break;
       case 'warn':
-        console.warn(`${prefix} ${message}`);
+        logger.warn(`${prefix} ${message}`);
         break;
       case 'success':
-        console.log(`${prefix} ✅ ${message}`);
+        logger.info(`${prefix} ✅ ${message}`);
+        break;
+      case 'debug':
+        logger.debug(`${prefix} ${message}`);
         break;
       default:
-        console.log(`${prefix} ${message}`);
+        logger.info(`${prefix} ${message}`);
     }
   }
 }

@@ -78,21 +78,21 @@ async function populateGiftDatabase() {
       // Store active gifts globally for mapping dropdowns
       window.allGiftsData.active = result.activeGifts.gifts;
 
+      // OPTIMIZED: Use flatMap to avoid nested loops
       // activeGifts.gifts is organized by coin value
-      Object.entries(result.activeGifts.gifts).forEach(([coins, giftNames]) => {
-        giftNames.forEach(name => {
-          allGifts.push({ name, coins: parseInt(coins), archived: false });
-        });
-      });
+      const activeGifts = Object.entries(result.activeGifts.gifts).flatMap(([coins, giftNames]) =>
+        giftNames.map(name => ({ name, coins: parseInt(coins), archived: false }))
+      );
+      allGifts.push(...activeGifts);
     } else if (typeof TIKTOK_GIFTS !== 'undefined') {
       // Fallback to hardcoded TIKTOK_GIFTS if active-gifts.json fails
       console.warn('Failed to load active-gifts.json, falling back to TIKTOK_GIFTS');
       window.allGiftsData.active = TIKTOK_GIFTS;
-      Object.entries(TIKTOK_GIFTS).forEach(([coins, giftNames]) => {
-        giftNames.forEach(name => {
-          allGifts.push({ name, coins: parseInt(coins), archived: false });
-        });
-      });
+      // OPTIMIZED: Use flatMap to avoid nested loops
+      const fallbackGifts = Object.entries(TIKTOK_GIFTS).flatMap(([coins, giftNames]) =>
+        giftNames.map(name => ({ name, coins: parseInt(coins), archived: false }))
+      );
+      allGifts.push(...fallbackGifts);
     } else {
       container.innerHTML = '<p>Gift database not loaded</p>';
       return;
@@ -102,11 +102,11 @@ async function populateGiftDatabase() {
     // Fallback to TIKTOK_GIFTS
     if (typeof TIKTOK_GIFTS !== 'undefined') {
       window.allGiftsData.active = TIKTOK_GIFTS;
-      Object.entries(TIKTOK_GIFTS).forEach(([coins, giftNames]) => {
-        giftNames.forEach(name => {
-          allGifts.push({ name, coins: parseInt(coins), archived: false });
-        });
-      });
+      // OPTIMIZED: Use flatMap to avoid nested loops
+      const errorFallbackGifts = Object.entries(TIKTOK_GIFTS).flatMap(([coins, giftNames]) =>
+        giftNames.map(name => ({ name, coins: parseInt(coins), archived: false }))
+      );
+      allGifts.push(...errorFallbackGifts);
     } else {
       container.innerHTML = '<p>Error loading gift database</p>';
       return;
@@ -395,6 +395,7 @@ async function saveCustomGifts() {
 }
 
 // Display custom gifts in the list
+// OPTIMIZED: Uses DocumentFragment to batch DOM updates
 function displayCustomGifts() {
   const container = document.getElementById('custom-gifts-list');
   if (!container) return;
@@ -405,6 +406,8 @@ function displayCustomGifts() {
   }
 
   container.innerHTML = '';
+  const fragment = document.createDocumentFragment();
+
   customGifts.forEach((gift, index) => {
     const chip = document.createElement('div');
     chip.className = 'custom-gift-chip';
@@ -421,8 +424,10 @@ function displayCustomGifts() {
 
     chip.appendChild(nameSpan);
     chip.appendChild(removeBtn);
-    container.appendChild(chip);
+    fragment.appendChild(chip);
   });
+
+  container.appendChild(fragment);
 }
 
 // Add custom gift
@@ -668,49 +673,52 @@ addManagedEventListener(resetDatabaseBtn, 'click', async () => {
 });
 
 // Generate coin range dropdown options
+// OPTIMIZED: Uses array join instead of string concatenation
 function generateCoinValueOptions() {
-  let optionsHTML = '<option value="">Select coin range...</option>';
+  const options = ['<option value="">Select coin range...</option>'];
   if (typeof COIN_RANGES !== 'undefined') {
     COIN_RANGES.forEach(range => {
-      optionsHTML += `<option value="${range.min}-${range.max}">${range.label}</option>`;
+      options.push(`<option value="${range.min}-${range.max}">${range.label}</option>`);
     });
   }
-  return optionsHTML;
+  return options.join('');
 }
 
 // Get all gifts within a coin range from active and archived data
+// OPTIMIZED: Uses flatMap and filter for better performance
 function getGiftsForCoinRangeLive(minCoins, maxCoins) {
   const gifts = [];
 
   // Add active gifts
   if (window.allGiftsData.active && Object.keys(window.allGiftsData.active).length > 0) {
-    for (const [coins, giftNames] of Object.entries(window.allGiftsData.active)) {
-      const coinValue = parseInt(coins);
-      if (coinValue >= minCoins && coinValue <= maxCoins) {
-        giftNames.forEach(name => {
-          gifts.push({ name, coins: coinValue, archived: false });
-        });
-      }
-    }
+    const activeGifts = Object.entries(window.allGiftsData.active)
+      .filter(([coins]) => {
+        const coinValue = parseInt(coins);
+        return coinValue >= minCoins && coinValue <= maxCoins;
+      })
+      .flatMap(([coins, giftNames]) =>
+        giftNames.map(name => ({ name, coins: parseInt(coins), archived: false }))
+      );
+    gifts.push(...activeGifts);
   } else if (typeof TIKTOK_GIFTS !== 'undefined') {
     // Fallback to hardcoded TIKTOK_GIFTS
-    for (const [coins, giftNames] of Object.entries(TIKTOK_GIFTS)) {
-      const coinValue = parseInt(coins);
-      if (coinValue >= minCoins && coinValue <= maxCoins) {
-        giftNames.forEach(name => {
-          gifts.push({ name, coins: coinValue, archived: false });
-        });
-      }
-    }
+    const fallbackGifts = Object.entries(TIKTOK_GIFTS)
+      .filter(([coins]) => {
+        const coinValue = parseInt(coins);
+        return coinValue >= minCoins && coinValue <= maxCoins;
+      })
+      .flatMap(([coins, giftNames]) =>
+        giftNames.map(name => ({ name, coins: parseInt(coins), archived: false }))
+      );
+    gifts.push(...fallbackGifts);
   }
 
   // Add archived gifts
   if (window.allGiftsData.archived && window.allGiftsData.archived.length > 0) {
-    window.allGiftsData.archived.forEach(gift => {
-      if (gift.coins >= minCoins && gift.coins <= maxCoins) {
-        gifts.push({ name: gift.name, coins: gift.coins, archived: true });
-      }
-    });
+    const archivedGifts = window.allGiftsData.archived
+      .filter(gift => gift.coins >= minCoins && gift.coins <= maxCoins)
+      .map(gift => ({ name: gift.name, coins: gift.coins, archived: true }));
+    gifts.push(...archivedGifts);
   }
 
   // Sort by archived status (active first), then coin value, then name
@@ -721,8 +729,10 @@ function getGiftsForCoinRangeLive(minCoins, maxCoins) {
 }
 
 // Generate gift options for a coin range (with overrides applied)
+// OPTIMIZED: Uses array join instead of string concatenation for better performance
 function generateGiftOptionsForCoinValue(rangeValue, selectedGift = '') {
-  let optionsHTML = '<option value="">Select a gift...</option>';
+  const options = ['<option value="">Select a gift...</option>'];
+
   if (rangeValue) {
     // Parse range value (e.g., "1-5" or "1001-2000")
     const [minStr, maxStr] = rangeValue.split('-');
@@ -737,12 +747,14 @@ function generateGiftOptionsForCoinValue(rangeValue, selectedGift = '') {
           const displayName = getGiftName(giftObj.name, giftObj.coins);
           const selected = giftObj.name === selectedGift ? 'selected' : '';
           const archivedLabel = giftObj.archived ? ' [ARCHIVED]' : '';
-          optionsHTML += `<option value="${giftObj.name}" ${selected} ${giftObj.archived ? 'class="archived-option"' : ''}>${displayName} (${giftObj.coins})${archivedLabel}</option>`;
+          const archivedClass = giftObj.archived ? 'class="archived-option"' : '';
+          options.push(`<option value="${giftObj.name}" ${selected} ${archivedClass}>${displayName} (${giftObj.coins})${archivedLabel}</option>`);
         });
       }
     }
   }
-  return optionsHTML;
+
+  return options.join('');
 }
 
 // Convert text inputs to cascading dropdown system
@@ -2489,21 +2501,20 @@ async function populateGiftImagesList() {
 
   try {
     // Load from active-gifts.json (updated database)
+    // OPTIMIZED: Use flatMap to avoid nested loops
     const result = await window.sniAPI.getActiveGifts();
     if (result && result.success && result.activeGifts && result.activeGifts.gifts) {
-      Object.entries(result.activeGifts.gifts).forEach(([coins, giftNames]) => {
-        giftNames.forEach(name => {
-          allGifts.push({ name, coins: parseInt(coins) });
-        });
-      });
+      const gifts = Object.entries(result.activeGifts.gifts).flatMap(([coins, giftNames]) =>
+        giftNames.map(name => ({ name, coins: parseInt(coins) }))
+      );
+      allGifts.push(...gifts);
     } else if (typeof TIKTOK_GIFTS !== 'undefined') {
       // Fallback to hardcoded TIKTOK_GIFTS
       console.warn('Failed to load active-gifts.json, falling back to TIKTOK_GIFTS for gift images');
-      Object.entries(TIKTOK_GIFTS).forEach(([coins, giftNames]) => {
-        giftNames.forEach(name => {
-          allGifts.push({ name, coins: parseInt(coins) });
-        });
-      });
+      const gifts = Object.entries(TIKTOK_GIFTS).flatMap(([coins, giftNames]) =>
+        giftNames.map(name => ({ name, coins: parseInt(coins) }))
+      );
+      allGifts.push(...gifts);
     } else {
       container.innerHTML = '<div class="no-gifts-message">Gift database not loaded</div>';
       return;
@@ -2511,12 +2522,12 @@ async function populateGiftImagesList() {
   } catch (error) {
     console.error('Error loading active gifts for images:', error);
     // Fallback to TIKTOK_GIFTS
+    // OPTIMIZED: Use flatMap to avoid nested loops
     if (typeof TIKTOK_GIFTS !== 'undefined') {
-      Object.entries(TIKTOK_GIFTS).forEach(([coins, giftNames]) => {
-        giftNames.forEach(name => {
-          allGifts.push({ name, coins: parseInt(coins) });
-        });
-      });
+      const gifts = Object.entries(TIKTOK_GIFTS).flatMap(([coins, giftNames]) =>
+        giftNames.map(name => ({ name, coins: parseInt(coins) }))
+      );
+      allGifts.push(...gifts);
     } else {
       container.innerHTML = '<div class="no-gifts-message">Error loading gift database</div>';
       return;
@@ -2531,6 +2542,9 @@ async function populateGiftImagesList() {
   }
 
   container.innerHTML = '';
+  // OPTIMIZED: Use DocumentFragment to batch DOM updates
+  const fragment = document.createDocumentFragment();
+
   allGifts.forEach(gift => {
     const currentUrl = getCurrentImageUrl(gift.name, gift.coins);
 
@@ -2617,8 +2631,10 @@ async function populateGiftImagesList() {
     item.appendChild(info);
     item.appendChild(input);
     item.appendChild(actions);
-    container.appendChild(item);
+    fragment.appendChild(item);
   });
+
+  container.appendChild(fragment);
 }
 
 /**

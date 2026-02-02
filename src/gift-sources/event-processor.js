@@ -2,6 +2,8 @@
  * EventProcessor
  * Source-agnostic gift event processing logic shared between HoellStream and TikFinity
  */
+const logger = require('../utils/logger');
+
 class EventProcessor {
   constructor(gameOperations, basicOperations, config = {}) {
     this.gameOps = gameOperations;  // expandedOps
@@ -28,14 +30,35 @@ class EventProcessor {
 
     // Load TIKTOK_GIFTS database for coin value lookups
     this.giftDatabase = config.giftDatabase || null;
+    // Create indexed Map for O(1) gift lookups
+    this.giftIndex = new Map(); // giftName (lowercase) -> { giftName: string, coins: number }
+
     if (this.giftDatabase) {
+      this._buildGiftIndex();
       const giftCount = Object.values(this.giftDatabase).reduce((sum, arr) => sum + arr.length, 0);
-      this.log(`📚 Gift database loaded with ${giftCount} gifts`);
+      this.log(`📚 Gift database loaded with ${giftCount} gifts (indexed for O(1) lookups)`);
     } else {
       this.log(`⚠️ No gift database provided - coin value tracking disabled`, 'warn');
     }
 
     this.log('🎁 EventProcessor initialized');
+  }
+
+  /**
+   * Build indexed Map from gift database for O(1) lookups
+   * @private
+   */
+  _buildGiftIndex() {
+    this.giftIndex.clear();
+    for (const [coins, giftNames] of Object.entries(this.giftDatabase)) {
+      const coinValue = parseInt(coins);
+      for (const giftName of giftNames) {
+        this.giftIndex.set(giftName.toLowerCase(), {
+          giftName: giftName,
+          coins: coinValue
+        });
+      }
+    }
   }
 
   /**
@@ -127,25 +150,39 @@ class EventProcessor {
 
   /**
    * Look up coin value for a gift name from TIKTOK_GIFTS database
+   * Uses O(1) Map lookup instead of O(n) linear search
    */
   getGiftCoinValue(giftName) {
     // Check if database is loaded
-    if (!this.giftDatabase) {
+    if (!this.giftDatabase || !this.giftIndex) {
       return 0;
     }
 
-    // Search through all coin values to find this gift
-    for (const [coins, giftNames] of Object.entries(this.giftDatabase)) {
-      if (giftNames.includes(giftName)) {
-        const coinValue = parseInt(coins);
-        this.log(`💰 Looked up "${giftName}": ${coinValue} coins`, 'info');
-        return coinValue;
-      }
+    // O(1) lookup using indexed Map
+    const giftData = this.giftIndex.get(giftName.toLowerCase());
+    if (giftData) {
+      this.log(`💰 Looked up "${giftName}": ${giftData.coins} coins`, 'info');
+      return giftData.coins;
     }
 
     // Gift not found in database
     this.log(`⚠️ Gift "${giftName}" not found in database`, 'warn');
     return 0;
+  }
+
+  /**
+   * Update gift database and rebuild index (called when database changes)
+   */
+  loadGiftDatabase(database) {
+    this.giftDatabase = database;
+    if (database) {
+      this._buildGiftIndex();
+      const giftCount = Object.values(database).reduce((sum, arr) => sum + arr.length, 0);
+      this.log(`🔄 Gift database reloaded with ${giftCount} gifts (index rebuilt)`);
+    } else {
+      this.giftIndex.clear();
+      this.log(`⚠️ Gift database cleared`, 'warn');
+    }
   }
 
   /**
@@ -687,7 +724,7 @@ class EventProcessor {
   }
 
   /**
-   * Internal logging helper
+   * Internal logging helper - uses configurable logger for performance
    */
   log(message, level = 'info') {
     const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
@@ -695,16 +732,19 @@ class EventProcessor {
 
     switch (level) {
       case 'error':
-        console.error(`${prefix} ${message}`);
+        logger.error(`${prefix} ${message}`);
         break;
       case 'warn':
-        console.warn(`${prefix} ${message}`);
+        logger.warn(`${prefix} ${message}`);
         break;
       case 'success':
-        console.log(`${prefix} ✅ ${message}`);
+        logger.info(`${prefix} ✅ ${message}`);
+        break;
+      case 'debug':
+        logger.debug(`${prefix} ${message}`);
         break;
       default:
-        console.log(`${prefix} ${message}`);
+        logger.info(`${prefix} ${message}`);
     }
   }
 }
