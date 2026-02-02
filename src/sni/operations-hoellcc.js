@@ -556,33 +556,40 @@ class HoellCCOperations {
    */
   async killPlayer() {
     try {
-      console.log('[killPlayer] Attempting to spawn poison mushroom on Mario...');
+      console.log('[killPlayer] Attempting to spawn poison mushroom for "Neighborhood of Make-Believe"...');
 
-      // Try common poison mushroom sprite IDs used in ROM hacks
+      // Try multiple sprite IDs to find the poison mushroom
       const spriteIds = [
-        { id: 0x4E, desc: '78 - Poison Mushroom (common in many hacks)' },
-        { id: 0xC7, desc: '199 - Custom sprite slot 1' },
-        { id: 0xC0, desc: '192 - Custom sprite slot 2' },
-        { id: 0x74, desc: '116 - Alternative poison mushroom' }
+        { id: 0x4E, desc: 'Poison Mushroom (0x4E/78)', custom: false },
+        { id: 0x74, desc: 'Alt Poison Mushroom (0x74/116)', custom: false },
+        { id: 0xC7, desc: 'Custom Sprite Slot (0xC7/199)', custom: true },
+        { id: 0xC0, desc: 'Custom Sprite Slot (0xC0/192)', custom: true },
+        { id: 0xC1, desc: 'Custom Sprite Slot (0xC1/193)', custom: true }
       ];
 
-      // Try the first sprite ID (most common)
-      const mainId = spriteIds[0];
-      console.log(`[killPlayer] Trying sprite ${mainId.desc}`);
-      const result = await this.spawner.spawnSprite(mainId.id, 0, -16, false);
+      // Try each sprite ID until one works
+      for (const sprite of spriteIds) {
+        console.log(`[killPlayer] Trying ${sprite.desc}...`);
+        const result = await this.spawner.spawnSprite(sprite.id, 0, -8, sprite.custom);
 
-      if (result.success) {
-        console.log('[killPlayer] Poison mushroom spawned successfully!');
-        return { success: true };
-      } else {
-        console.log(`[killPlayer] Spawn failed: ${result.error || 'Unknown error'}`);
-        console.log('[killPlayer] Falling back to pit death');
-        // Fallback: pit death
-        await this.client.writeMemory(0x7E0096, Buffer.from([0xFF]));
-        await this.client.writeMemory(0x7E0097, Buffer.from([0x02]));
-        console.log('[killPlayer] Pit death triggered');
-        return { success: true };
+        if (result.success) {
+          console.log(`[killPlayer] ✓ Successfully spawned sprite ${sprite.desc}!`);
+          console.log('[killPlayer] Check if the right sprite appeared in-game');
+          return { success: true };
+        } else {
+          console.log(`[killPlayer] ✗ Failed: ${result.error || 'Unknown'}`);
+        }
+
+        // Small delay between attempts
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
+
+      // If all sprite attempts failed, fall back to pit death
+      console.log('[killPlayer] All sprite attempts failed - using pit death fallback');
+      await this.client.writeMemory(0x7E0096, Buffer.from([0xFF]));
+      await this.client.writeMemory(0x7E0097, Buffer.from([0x02]));
+      console.log('[killPlayer] Pit death triggered');
+      return { success: true };
     } catch (error) {
       console.error('[killPlayer] Error:', error.message);
       return { success: false, error: error.message };
